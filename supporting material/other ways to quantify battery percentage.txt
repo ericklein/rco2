@@ -1,0 +1,49 @@
+      // Adafruit ESP32 V2 power management guide code form https://learn.adafruit.com/adafruit-esp32-feather-v2/power-management-2, which does not work? [logged issue]
+      // hardwareData.batteryVoltage = analogReadMilliVolts(VBATPIN);
+      // hardwareData.batteryVoltage *= 2;    // we divided by 2, so multiply back
+      // hardwareData.batteryVoltage /= 1000; // convert to volts!
+
+      // manual percentage decay map from https://blog.ampow.com/lipo-voltage-chart/
+      // hardwareData.batteryPercent = 100;
+      // if ((hardwareData.batteryVoltage < 4.2) && (hardwareData.batteryVoltage > 4.15))
+      //   hardwareData.batteryPercent = 95;
+      // if ((hardwareData.batteryVoltage < 4.16) && (hardwareData.batteryVoltage > 4.10))
+      //   hardwareData.batteryPercent = 90;
+      // if ((hardwareData.batteryVoltage < 4.11) && (hardwareData.batteryVoltage > 4.07))
+      //   hardwareData.batteryPercent = 85;
+      // if ((hardwareData.batteryVoltage < 4.08) && (hardwareData.batteryVoltage > 4.01))
+      //   hardwareData.batteryPercent = 80;
+      // if ((hardwareData.batteryVoltage < 4.02) && (hardwareData.batteryVoltage > 3.97))
+      //   hardwareData.batteryPercent = 75;
+      // if ((hardwareData.batteryVoltage < 3.98) && (hardwareData.batteryVoltage > 3.94))
+      //   hardwareData.batteryPercent = 70;
+       // if ((hardwareData.batteryVoltage < 3.95) && (hardwareData.batteryVoltage > 3.90))
+      // hardwareData.batteryPercent = 65;
+      //  if ((hardwareData.batteryVoltage < 3.91) && (hardwareData.batteryVoltage > 3.87))
+      //    hardwareData.batteryPercent = 60;
+      //  if ((hardwareData.batteryVoltage < 3.87) && (hardwareData.batteryVoltage > 3.84))
+      //    hardwareData.batteryPercent = 55;
+      //  if (hardwareData.batteryVoltage = 3.84)
+      //    hardwareData.batteryPercent = 50;
+      //  if ((hardwareData.batteryVoltage < 3.84) && (hardwareData.batteryVoltage > 3.81))
+      //    hardwareData.batteryPercent = 45;
+      //  if ((hardwareData.batteryVoltage < 3.82) && (hardwareData.batteryVoltage > 3.79))
+      //    hardwareData.batteryPercent = 40;
+      //  if (hardwareData.batteryVoltage = 3.79)
+      //    hardwareData.batteryPercent = 35;
+      //  if ((hardwareData.batteryVoltage < 3.79) && (hardwareData.batteryVoltage > 3.76))
+      //    hardwareData.batteryPercent = 30;
+      //  if ((hardwareData.batteryVoltage < 3.77) && (hardwareData.batteryVoltage > 3.74))
+      //    hardwareData.batteryPercent = 25;
+      //  if ((hardwareData.batteryVoltage < 3.75) && (hardwareData.batteryVoltage > 3.72))
+      //    hardwareData.batteryPercent = 20;      
+      //  if ((hardwareData.batteryVoltage < 3.73) && (hardwareData.batteryVoltage > 3.70))
+      //    hardwareData.batteryPercent = 15;
+      //  if ((hardwareData.batteryVoltage < 3.73) && (hardwareData.batteryVoltage > 3.70))
+      //    hardwareData.batteryPercent = 15;
+      //  if ((hardwareData.batteryVoltage < 3.71) && (hardwareData.batteryVoltage > 3.68))
+      //    hardwareData.batteryPercent = 10;
+      //  if ((hardwareData.batteryVoltage < 3.69) && (hardwareData.batteryVoltage > 3.60))
+      //    hardwareData.batteryPercent = 5;
+      //  if (hardwareData.batteryVoltage < 3.61)
+      //    hardwareData.batteryPercent = 0;
