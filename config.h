@@ -9,21 +9,21 @@
 // comment out to turn off; 1 = summary, 2 = verbose
 #define DEBUG 1
 
-// simulate SCD40 sensor operations, returning random but plausible values
+// simulate hardware inputs, returning random but plausible values
 // comment out to turn off
-// #define SENSOR_SIMULATE
-const uint16_t sensorTempMin =      1500; // will be divided by 100.0 to give floats
-const uint16_t sensorTempMax =      2500;
-const uint16_t sensorHumidityMin =  500; // will be divided by 100.0 to give floats
-const uint16_t sensorHumidityMax =  9500;
-const uint16_t sensorCO2Min =       400;
-const uint16_t sensorCO2Max =       3000;  
+#define SENSOR_SIMULATE
 
-// Configuration Step 3: Set network data endpoints
-// #define MQTT 		    // log sensor data to M/QTT broker
-// #define HASSIO_MQTT  // And, if MQTT enabled, with Home Assistant too?
-#define INFLUX	      // Log data to InfluxDB server
-// #define DWEET        // Post info to Dweet
+#ifdef SENSOR_SIMULATE
+  const uint16_t sensorTempMin =      1500; // will be divided by 100.0 to give floats
+  const uint16_t sensorTempMax =      2500;
+  const uint16_t sensorHumidityMin =  500; // will be divided by 100.0 to give floats
+  const uint16_t sensorHumidityMax =  9500;
+  const uint16_t sensorCO2Min =       400;
+  const uint16_t sensorCO2Max =       3000;
+
+  const uint16_t batterySimVoltageMin = 370; // will be divided by 100.0 to give floats
+  const uint16_t batterySimVoltageMax = 410;
+#endif
 
 // Configuration Step 4: Set battery parameters, if applicable
 // If LC709203F detected on i2c, define battery pack based on settings curve from datasheet
@@ -38,45 +38,8 @@ const uint16_t sensorCO2Max =       3000;
 
 // Configuration variables that change rarely
 
-// Network
-// max connection attempts to network services
-const uint8_t networkConnectAttemptLimit = 3;
-// seconds between network service connect attempts
-const uint8_t networkConnectAttemptInterval = 10;
-
-// Time
-// NTP time parameters
-// const char* networkNTPAddress = "pool.ntp.org";
-#define networkNTPAddress "pool.ntp.org"
-const String networkTimeZone = "PST8PDT,M3.2.0,M11.1.0"; // America/Los_Angeles
-const String weekDays[7] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
-
-// Data endpoints
-#ifdef INFLUX
-  #define INFLUX_ENV_MEASUREMENT "weather"  // Used for environmental sensor data
-  #define INFLUX_DEV_MEASUREMENT "device"   // Used for logging AQI device data (e.g. battery)
-#endif
-
-#ifdef DWEET
-  // Post data to the internet via dweet.io.  Set DWEET_DEVICE to be a
-  // unique name you want associated with this reporting device, allowing
-  // data to be easily retrieved through the web or Dweet's REST API.
-  #define DWEET_HOST "dweet.io"   // Typically dweet.io
-  #define DWEET_DEVICE "makerhour-rco2"  // Must be unique across all of dweet.io
-#endif
-
 // Display
-// Pin config for host board to 1.54" 200x200 EPD
-#define EPD_CS      12
-#define EPD_DC      27
-//#define SRAM_CS     14
-#define EPD_RESET   15
-#define EPD_BUSY    32
-
-// enable GxEPD2_GFX base class to pass references or pointers to the display instance as parameter, uses ~1.2k more code
-#define ENABLE_GxEPD2_GFX 1
-// orientation of screen relative to physical housing 
-const uint8_t displayRotation = 0; // rotation 0 orients as "top" near flex cable
+const uint8_t displayRotation = 1; // rotation 0 orients XXX
 
 // CO2 
 //sample timing
@@ -89,9 +52,6 @@ const uint8_t displayRotation = 0; // rotation 0 orients as "top" near flex cabl
 	#define READS_PER_SAMPLE	3
 	#define SAMPLE_INTERVAL 	180
 #endif
-// number of samples stored to generate sparkline
-// FIX: nvStorageRead and nvStorageWrite currently don't work if >10
-const uint8_t co2MaxStoredSamples = 10;
 const String co2Labels[5]={"Good", "OK", "So-So", "Poor", "Bad"};
 
 // Battery
