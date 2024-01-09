@@ -22,14 +22,12 @@ Adafruit_SH1107 display = Adafruit_SH1107(64, 128, &Wire);
 // Special glyphs for the UI
 #include "glyphs.h"
 
-// initialize scd40 CO2 sensor
 #ifndef SENSOR_SIMULATE
+  // initialize scd40 CO2 sensor
   #include <SensirionI2CScd4x.h>
   SensirionI2CScd4x envSensor;
-#endif
 
-// Battery voltage sensor
-#ifndef SENSOR_SIMULATE
+  // Battery voltage sensor
   #include <Adafruit_LC709203F.h>
   Adafruit_LC709203F lc;
 #endif
@@ -71,7 +69,7 @@ void setup()
     while (!Serial);
   #endif
 
-  debugMessage(String("RCO2 start with ") + SAMPLE_INTERVAL + " second sample interval",1);
+  debugMessage(String("RCO2 start with ") + sensorSampleInterval + " second sample interval",1);
 
   // initiate first to display hardware error messages
   if(!display.begin(0x3C, true)) {
@@ -79,6 +77,8 @@ void setup()
     while(1); // Don't proceed, loop forever
   }
   display.setRotation(displayRotation);
+  display.clearDisplay();
+  display.display();
 
   // Initialize environmental sensor
   if (!sensorCO2Init()) {
@@ -86,7 +86,7 @@ void setup()
     screenAlert(5, ((display.height()/2)+6), "No SCD40");
     // This error often occurs right after a firmware flash and reset.
     // Hardware deep sleep typically resolves it, so quickly cycle the hardware
-    //powerDisable(HARDWARE_ERROR_INTERVAL);
+    //powerDisable(hardwareRebootInterval);
   }
 }
 
@@ -99,7 +99,7 @@ void loop()
   unsigned long currentMillis = millis();
 
   // is it time to read the sensor?
-  if((currentMillis - prevSampleMs) >= (SAMPLE_INTERVAL * 1000)) // converting SAMPLE_INTERVAL into milliseconds
+  if((currentMillis - prevSampleMs) >= (sensorSampleInterval * 1000)) // converting sensorSampleInterval into milliseconds
   {
     // Check for a battery, and if so, is it supplying enough voltage to drive the SCD40
     batteryRead(batteryReadsPerSample);
@@ -108,13 +108,13 @@ void loop()
       debugMessage("Battery below required threshold, rebooting",1);
       screenAlert(20, ((display.height()/2)+6), "Low battery");
       // this is a recursive boot sequence
-      // powerDisable(HARDWARE_ERROR_INTERVAL);
+      // powerDisable(hardwareRebootInterval);
   }
   if (!sensorCO2Read())
   {
     debugMessage("SCD40 returned no/bad data",1);
     screenAlert(5, ((display.height()/2)+6),"SCD40 read issue");
-    // powerDisable(HARDWARE_ERROR_INTERVAL);
+    // powerDisable(hardwareRebootInterval);
   }
   screenInfo("");
   prevSampleMs = currentMillis;
@@ -163,11 +163,13 @@ void screenInfo(String messageText)
   screenHelperBatteryStatus((display.width()-xMargins-batteryBarWidth-3),(display.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
 
   display.setTextColor(SH110X_WHITE);
+  display.setFont(&FreeSans12pt7b);
+  display.setCursor(0,20);
+  display.println(String("CO2:")+sensorData.ambientCO2);
   display.setFont();
-  display.setCursor(0,0);
-  display.println(String("Temp is ")+sensorData.ambientTemperatureF+"F");
-  display.println(String("Humidity is ")+sensorData.ambientHumidity+"%");
-  display.println(String("CO2 is ")+sensorData.ambientCO2+"ppm");
+  display.setCursor(0,30);
+  display.println(String("Temp:")+sensorData.ambientTemperatureF+"F");
+  display.println(String("Humidity: ")+sensorData.ambientHumidity+"%");
   display.display();
 
   // // display sparkline
@@ -241,19 +243,13 @@ void batteryRead(uint8_t reads)
         // modified from the Adafruit power management guide for Adafruit ESP32V2
         float accumulatedVoltage = 0.0;
         for (uint8_t loop = 0; loop < reads; loop++)
-        {
-          accumulatedVoltage += analogReadMilliVolts(VBATPIN);
-        }
-         // average the readings
-        hardwareData.batteryVoltage = accumulatedVoltage/reads;
+          {
+            accumulatedVoltage += analogReadMilliVolts(BATTERY_VOLTAGE_PIN);
+          }
+        hardwareData.batteryVoltage = accumulatedVoltage/reads; // we now have the average reading
         // convert into volts  
         hardwareData.batteryVoltage *= 2;    // we divided by 2, so multiply back
         hardwareData.batteryVoltage /= 1000; // convert to volts!
-        hardwareData.batteryVoltage *= 2;     // we divided by 2, so multiply back
-        // ESP32 suggested algo
-        // hardwareData.batteryVoltage *= 3.3;   // Multiply by 3.3V, our reference voltage
-        // hardwareData.batteryVoltage *= 1.05;  // the 1.05 is a fudge factor original author used to align reading with multimeter
-        // hardwareData.batteryVoltage /= 4095;  // assumes default ESP32 analogReadResolution (4095)
         hardwareData.batteryPercent = batteryGetChargeLevel(hardwareData.batteryVoltage);
       #endif
     }
@@ -264,8 +260,10 @@ void batteryRead(uint8_t reads)
 void batterySimulate()
 {
   // IMPROVEMENT: Simulate battery below SCD40 required level
-  hardwareData.batteryVoltage = random(batterySimVoltageMin, batterySimVoltageMax) / 100.00;
-  hardwareData.batteryPercent = batteryGetChargeLevel(hardwareData.batteryVoltage);
+  #ifdef SENSOR_SIMULATE
+    hardwareData.batteryVoltage = random(batterySimVoltageMin, batterySimVoltageMax) / 100.00;
+    hardwareData.batteryPercent = batteryGetChargeLevel(hardwareData.batteryVoltage);
+  #endif
 }
 
 int batteryGetChargeLevel(float volts)
@@ -362,18 +360,19 @@ void sensorCO2Simulate()
 }
 
 bool sensorCO2Read()
-// reads SCD40 READS_PER_SAMPLE times then stores last read
+// reads SCD40 sensorReadsPerSample times then stores last read
 {
   #ifdef SENSOR_SIMULATE
     sensorCO2Simulate();
   #else
     char errorMessage[256];
 
-    screenAlert(20, ((display.height()/2)+6), "CO2 check");
-    for (uint8_t loop=1; loop<=READS_PER_SAMPLE; loop++)
+    screenAlert(5, ((display.height()/2)+6), "CO2 check");
+    for (uint8_t loop=1; loop<=sensorReadsPerSample; loop++)
     {
       // SCD40 datasheet suggests 5 second delay between SCD40 reads
-      if (loop>1) delay(5000);
+      // assume sensorSampleInterval will create needed delay for loop == 1 
+      if (loop > 1) delay(5000);
       uint16_t error = envSensor.readMeasurement(sensorData.ambientCO2, sensorData.ambientTemperatureF, sensorData.ambientHumidity);
       // handle SCD40 errors
       if (error) {
@@ -386,7 +385,7 @@ bool sensorCO2Read()
         debugMessage("SCD40 CO2 reading out of range",1);
         return false;
       }
-      debugMessage(String("SCD40 read ") + loop + " of " + READS_PER_SAMPLE + " : " + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",2);
+      debugMessage(String("SCD40 read ") + loop + " of " + sensorReadsPerSample + " : " + sensorData.ambientTemperatureF + "C, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",2);
     }
   #endif
   //convert temperature from Celcius to Fahrenheit

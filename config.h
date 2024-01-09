@@ -7,11 +7,11 @@
 
 // Configuration Step 2: Set debug parameters
 // comment out to turn off; 1 = summary, 2 = verbose
-#define DEBUG 1
+// #define DEBUG 1
 
-// simulate hardware inputs, returning random but plausible values
+// Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
-#define SENSOR_SIMULATE
+// #define SENSOR_SIMULATE
 
 #ifdef SENSOR_SIMULATE
   const uint16_t sensorTempMin =      1500; // will be divided by 100.0 to give floats
@@ -45,18 +45,18 @@ const uint8_t displayRotation = 1; // rotation 0 orients XXX
 //sample timing
 #ifdef DEBUG
 	// number of times SCD40 is read, last read is the sample value
-	#define READS_PER_SAMPLE	1
+	const uint8_t sensorReadsPerSample =	1;
 	// time between samples in seconds. Must be >=180 to protect 3 color EPD
-	#define SAMPLE_INTERVAL		60
+  const uint16_t sensorSampleInterval = 60;
 #else
-	#define READS_PER_SAMPLE	3
-	#define SAMPLE_INTERVAL 	180
+  const uint8_t sensorReadsPerSample =  3;
+  const uint16_t sensorSampleInterval = 180;
 #endif
 const String co2Labels[5]={"Good", "OK", "So-So", "Poor", "Bad"};
 
 // Battery
 // analog pin used to reading battery voltage
-#define VBATPIN A13 // ESP32V2
+#define BATTERY_VOLTAGE_PIN A13 // ESP32V2
 // number of analog pin reads sampled to average battery voltage
 const uint8_t   batteryReadsPerSample = 5;
 // battery charge level lookup table
@@ -81,4 +81,4 @@ const float batteryVoltageTable[101] = {
 
 // Hardware
 // Sleep time in seconds if hardware error occurs
-#define HARDWARE_ERROR_INTERVAL 10
+const uint8_t hardwareRebootInterval = 10;
