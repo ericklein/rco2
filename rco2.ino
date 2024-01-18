@@ -15,9 +15,10 @@
 Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 
 #include "Fonts/meteocons16pt7b.h"
-#include <Fonts/FreeSans9pt7b.h>
-#include <Fonts/FreeSans12pt7b.h>
+// #include <Fonts/FreeSans9pt7b.h>
+// #include <Fonts/FreeSans12pt7b.h>
 #include <Fonts/FreeSans18pt7b.h>
+#include <Fonts/FreeSans24pt7b.h>
 
 // Special glyphs for the UI
 #include "glyphs.h"
@@ -154,7 +155,7 @@ void screenAlert(int initialX, int initialY, String messageText)
   display.fillScreen(ST77XX_BLACK);
 
   display.setTextColor(ST77XX_WHITE);
-  display.setFont(&FreeSans12pt7b);
+  display.setFont(&FreeSans24pt7b);
   display.setCursor(initialX, initialY);
   display.print(messageText);
   debugMessage("screenAlert refresh complete",1);
@@ -173,12 +174,13 @@ void screenInfo(String messageText)
   screenHelperBatteryStatus((display.width()-xMargins-batteryBarWidth-3),(display.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
 
   display.setTextColor(ST77XX_WHITE);
-  display.setFont(&FreeSans12pt7b);
-  display.setCursor(0,20);
-  display.println(String("CO2:")+sensorData.ambientCO2);
-  display.setFont();
+  display.setFont(&FreeSans24pt7b);
   display.setCursor(0,30);
+  display.println(String("CO2:")+sensorData.ambientCO2);
+  display.setFont(&FreeSans18pt7b);
+  display.setCursor(0,60);
   display.println(String("Temp:")+sensorData.ambientTemperatureF+"F");
+  display.setCursor(0,90);
   display.println(String("Humidity: ")+sensorData.ambientHumidity+"%");
 
   // // display sparkline
@@ -275,7 +277,7 @@ void screenHelperBatteryStatus(uint16_t initialX, uint16_t initialY, uint8_t bar
     display.drawRect(initialX, initialY, barWidth, barHeight, ST77XX_WHITE);
     //battery percentage as rectangle fill, 1 pixel inset from the battery border
     display.fillRect((initialX + 2), (initialY + 2), int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))), (barHeight - 4), ST77XX_WHITE);
-    debugMessage(String("Battery percent displayed=") + hardwareData.batteryPercent + "%, " + int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))) + " of " + (barWidth-4) + " pixels",1);
+    debugMessage(String("Battery percent displayed is ") + hardwareData.batteryPercent + "%, " + int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))) + " of " + (barWidth-4) + " pixels",1);
   }
   else
     debugMessage("No battery voltage for screenHelperBatteryStatus to render",1);
