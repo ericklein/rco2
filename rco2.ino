@@ -59,7 +59,7 @@ typedef struct {
 } hdweData;
 hdweData hardwareData;
 
-unsigned long prevSampleMs  = 0;  // Timestamp for measuring elapsed sample time
+long timeLastSample  = -(sensorSampleInterval*1000);  // set to trigger sample on first iteration of loop()
 
 void setup()
 {
@@ -85,6 +85,7 @@ void setup()
   // initialize TFT screen
   display.init(135, 240); // Init ST7789 240x135
   display.setRotation(displayRotation);
+  display.setTextWrap(false);
   display.fillScreen(ST77XX_BLACK);
 
   // Initialize environmental sensor
@@ -105,10 +106,10 @@ void setup()
 void loop()
 {
   // update current timer value
-  unsigned long currentMillis = millis();
+  unsigned long timeCurrent = millis();
 
   // is it time to read the sensor?
-  if((currentMillis - prevSampleMs) >= (sensorSampleInterval * 1000)) // converting sensorSampleInterval into milliseconds
+  if((timeCurrent - timeLastSample) >= (sensorSampleInterval * 1000)) // converting sensorSampleInterval into milliseconds
   {
     // Check battery to see if it is supplying enough voltage to drive the SCD40
     batteryRead();
@@ -131,7 +132,7 @@ void loop()
       // powerDisable(hardwareRebootInterval);
     }
     screenInfo("");
-    prevSampleMs = currentMillis;
+    timeLastSample = timeCurrent;
   }
 }
 
