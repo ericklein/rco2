@@ -148,18 +148,25 @@ void debugMessage(String messageText, int messageLevel)
   #endif
 }
 
-void screenAlert(int initialX, int initialY, String messageText)
-// Display critical error message on screen
+void screenAlert(String messageText)
+// Display error message centered on screen
 {
-  debugMessage("screenAlert refresh started",1);
+  debugMessage("screenAlert start",1);
   // Clear the screen
   display.fillScreen(ST77XX_BLACK);
 
+  int16_t x1, y1;
+  uint16_t width, height;
+
   display.setTextColor(ST77XX_WHITE);
   display.setFont(&FreeSans24pt7b);
-  display.setCursor(initialX, initialY);
+  display.getTextBounds(messageText.c_str(), 0, 0, &x1, &y1, &width, &height);
+  if (width >= display.width()) {
+    debugMessage(String("ERROR: screenAlert '") + messageText + "' is " + abs(display.width()-width) + " pixels too long", 1);
+  }
+  display.setCursor(display.width() / 2 - width / 2, display.height() / 2 + height / 2);
   display.print(messageText);
-  debugMessage("screenAlert refresh complete",1);
+  debugMessage("screenAlert end",1);
 }
 
 void screenInfo(String messageText)
@@ -386,7 +393,7 @@ void powerDisable(uint8_t deepSleepTime)
 
   //networkDisconnect();
 
-  // power down MAX1704X
+  // power down MAX1704
   lipoBattery.hibernate();
   debugMessage("power off: MAX1704X",2);
 
