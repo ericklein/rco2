@@ -11,13 +11,14 @@
 #include "secrets.h"
 
 // screen support
-#include <Adafruit_SH110X.h>
-Adafruit_SH1107 display = Adafruit_SH1107(64, 128, &Wire);
+#include <Adafruit_ST7789.h>
+Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 
 #include "Fonts/meteocons16pt7b.h"
-#include <Fonts/FreeSans9pt7b.h>
-#include <Fonts/FreeSans12pt7b.h>
+// #include <Fonts/FreeSans9pt7b.h>
+// #include <Fonts/FreeSans12pt7b.h>
 #include <Fonts/FreeSans18pt7b.h>
+#include <Fonts/FreeSans24pt7b.h>
 
 // Special glyphs for the UI
 #include "glyphs.h"
@@ -28,8 +29,8 @@ Adafruit_SH1107 display = Adafruit_SH1107(64, 128, &Wire);
   SensirionI2CScd4x envSensor;
 
   // Battery voltage sensor
-  #include <Adafruit_LC709203F.h>
-  Adafruit_LC709203F lc;
+  #include "Adafruit_MAX1704X.h"
+  Adafruit_MAX17048 lipoBattery;
 #endif
 
 // screen layout assists
@@ -58,7 +59,7 @@ typedef struct {
 } hdweData;
 hdweData hardwareData;
 
-unsigned long prevSampleMs  = 0;  // Timestamp for measuring elapsed sample time
+long timeLastSample  = -(sensorSampleInterval*1000);  // set to trigger sample on first iteration of loop()
 
 void setup()
 {
@@ -71,14 +72,21 @@ void setup()
 
   debugMessage(String("RCO2 start with ") + sensorSampleInterval + " second sample interval",1);
 
-  // initiate first to display hardware error messages
-  if(!display.begin(0x3C, true)) {
-    debugMessage("Display initialization failed",1);
-    while(1); // Don't proceed, loop forever
-  }
+  // initialize screen first to display hardware error messages
+  // turn on backlite
+  pinMode(TFT_BACKLITE, OUTPUT);
+  digitalWrite(TFT_BACKLITE, HIGH);
+
+  // turn on the TFT / I2C power supply
+  pinMode(TFT_I2C_POWER, OUTPUT);
+  digitalWrite(TFT_I2C_POWER, HIGH);
+  delay(10);
+
+  // initialize TFT screen
+  display.init(135, 240); // Init ST7789 240x135
   display.setRotation(displayRotation);
-  display.clearDisplay();
-  display.display();
+  display.setTextWrap(false);
+  display.fillScreen(ST77XX_BLACK);
 
   // Initialize environmental sensor
   if (!sensorCO2Init()) {
@@ -86,41 +94,47 @@ void setup()
     screenAlert(5, ((display.height()/2)+6), "No SCD40");
     // This error often occurs right after a firmware flash and reset.
     // Hardware deep sleep typically resolves it, so quickly cycle the hardware
-    //powerDisable(hardwareRebootInterval);
+    powerDisable(hardwareRebootInterval);
   }
+
+  // initialize battery monitor
+  lipoBattery.setAlertVoltages(batteryVoltageMinAlert,batteryVoltageMaxAlert);
+  if (lipoBattery.isHibernating())
+    lipoBattery.wake();
 }
 
 void loop()
 {
-  // read sensor if time
-  // update the screen
-
   // update current timer value
-  unsigned long currentMillis = millis();
+  unsigned long timeCurrent = millis();
 
   // is it time to read the sensor?
-  if((currentMillis - prevSampleMs) >= (sensorSampleInterval * 1000)) // converting sensorSampleInterval into milliseconds
+  if((timeCurrent - timeLastSample) >= (sensorSampleInterval * 1000)) // converting sensorSampleInterval into milliseconds
   {
-    // Check for a battery, and if so, is it supplying enough voltage to drive the SCD40
-    batteryRead(batteryReadsPerSample);
-    if ((hardwareData.batteryVoltage < batteryVoltageTable[4]) && (hardwareData.batteryVoltage != 0.0))
+    // Check battery to see if it is supplying enough voltage to drive the SCD40
+    batteryRead();
+    if (lipoBattery.isActiveAlert())
     {
-      debugMessage("Battery below required threshold, rebooting",1);
-      screenAlert(20, ((display.height()/2)+6), "Low battery");
-      // this is a recursive boot sequence
+      uint8_t status_flags = lipoBattery.getAlertStatus();
+      if (status_flags & MAX1704X_ALERTFLAG_VOLTAGE_LOW)
+      {
+        debugMessage("Battery below required threshold",1);
+        screenAlert(20, ((display.height()/2)+6), "Low battery");
+        lipoBattery.clearAlertFlag(MAX1704X_ALERTFLAG_VOLTAGE_LOW); // clear the alert
+        // freeze user operation. If the device is attached to charger, it will get out of this situation
+        // while(1);
+      }
+    }
+    if (!sensorCO2Read())
+    {
+      debugMessage("SCD40 returned no/bad data",1);
+      screenAlert(5, ((display.height()/2)+6),"SCD40 read issue");
       // powerDisable(hardwareRebootInterval);
-  }
-  if (!sensorCO2Read())
-  {
-    debugMessage("SCD40 returned no/bad data",1);
-    screenAlert(5, ((display.height()/2)+6),"SCD40 read issue");
-    // powerDisable(hardwareRebootInterval);
-  }
-  screenInfo("");
-  prevSampleMs = currentMillis;
+    }
+    screenInfo("");
+    timeLastSample = timeCurrent;
   }
 }
-
 
 void debugMessage(String messageText, int messageLevel)
 // wraps Serial.println as #define conditional
@@ -134,20 +148,25 @@ void debugMessage(String messageText, int messageLevel)
   #endif
 }
 
-void screenAlert(int initialX, int initialY, String messageText)
-// Display critical error message on screen
+void screenAlert(String messageText)
+// Display error message centered on screen
 {
-  debugMessage("screenAlert refresh started",1);
-  // Clear the buffer.
-  display.clearDisplay();
-  display.display();
+  debugMessage("screenAlert start",1);
+  // Clear the screen
+  display.fillScreen(ST77XX_BLACK);
 
-  display.setTextColor(SH110X_WHITE);
-  display.setFont(&FreeSans12pt7b);
-  display.setCursor(initialX, initialY);
+  int16_t x1, y1;
+  uint16_t width, height;
+
+  display.setTextColor(ST77XX_WHITE);
+  display.setFont(&FreeSans24pt7b);
+  display.getTextBounds(messageText.c_str(), 0, 0, &x1, &y1, &width, &height);
+  if (width >= display.width()) {
+    debugMessage(String("ERROR: screenAlert '") + messageText + "' is " + abs(display.width()-width) + " pixels too long", 1);
+  }
+  display.setCursor(display.width() / 2 - width / 2, display.height() / 2 + height / 2);
   display.print(messageText);
-  display.display();
-  debugMessage("screenAlert refresh complete",1);
+  debugMessage("screenAlert end",1);
 }
 
 void screenInfo(String messageText)
@@ -155,22 +174,22 @@ void screenInfo(String messageText)
 {
   debugMessage("screenInfo refresh started",1);
   
-  // Clear the buffer.
-  display.clearDisplay();
+  // Clear the screen
+  display.fillScreen(ST77XX_BLACK);
 
   // screen helper routines
   // display battery level in the lower right corner, -3 in first parameter accounts for battery nub
   screenHelperBatteryStatus((display.width()-xMargins-batteryBarWidth-3),(display.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
 
-  display.setTextColor(SH110X_WHITE);
-  display.setFont(&FreeSans12pt7b);
-  display.setCursor(0,20);
-  display.println(String("CO2:")+sensorData.ambientCO2);
-  display.setFont();
+  display.setTextColor(ST77XX_WHITE);
+  display.setFont(&FreeSans24pt7b);
   display.setCursor(0,30);
+  display.println(String("CO2:")+sensorData.ambientCO2);
+  display.setFont(&FreeSans18pt7b);
+  display.setCursor(0,60);
   display.println(String("Temp:")+sensorData.ambientTemperatureF+"F");
+  display.setCursor(0,90);
   display.println(String("Humidity: ")+sensorData.ambientHumidity+"%");
-  display.display();
 
   // // display sparkline
   // screenHelperSparkLine(xMargins,ySparkline,(display.width() - (2* xMargins)),sparklineHeight);
@@ -218,40 +237,27 @@ void screenInfo(String messageText)
   debugMessage("screenInfo refresh complete",1);
 }
 
-void batteryRead(uint8_t reads)
+void batteryRead()
 // sets global battery values from i2c battery monitor or analog pin value on supported boards
 {
   #ifdef SENSOR_SIMULATE
     batterySimulate();
     debugMessage(String("SIMULATED Battery voltage: ") + hardwareData.batteryVoltage + "v, percent: " + hardwareData.batteryPercent + "%",1);
   #else
-    hardwareData.batteryVoltage = 0.0;  // 0.0 means no battery attached, now try to sample battery voltage
-    hardwareData.batteryPercent = 0.0;
-    // Sample i2c battery monitor if available
-    if (lc.begin())
+    // Sample i2c battery monitor
+    if (lipoBattery.begin())
     {
-      debugMessage(String("Version: 0x")+lc.getICversion(),2);
-      lc.setPackAPA(BATTERY_APA);
-
-      hardwareData.batteryPercent = lc.cellPercent();
-      hardwareData.batteryVoltage = lc.cellVoltage();
+      debugMessage(String("Found MAX1704X at I2C address 0x") + lipoBattery.getChipID(),2);
+      hardwareData.batteryPercent = lipoBattery.cellPercent();
+      hardwareData.batteryVoltage = lipoBattery.cellVoltage();
+      delay(2000);
+      hardwareData.batteryPercent = lipoBattery.cellPercent();
+      hardwareData.batteryVoltage = lipoBattery.cellVoltage();
     } 
     else
     {
-      // sample battery voltage via analog pin on supported boards
-      #if defined (ARDUINO_ADAFRUIT_FEATHER_ESP32_V2)
-        // modified from the Adafruit power management guide for Adafruit ESP32V2
-        float accumulatedVoltage = 0.0;
-        for (uint8_t loop = 0; loop < reads; loop++)
-          {
-            accumulatedVoltage += analogReadMilliVolts(BATTERY_VOLTAGE_PIN);
-          }
-        hardwareData.batteryVoltage = accumulatedVoltage/reads; // we now have the average reading
-        // convert into volts  
-        hardwareData.batteryVoltage *= 2;    // we divided by 2, so multiply back
-        hardwareData.batteryVoltage /= 1000; // convert to volts!
-        hardwareData.batteryPercent = batteryGetChargeLevel(hardwareData.batteryVoltage);
-      #endif
+      hardwareData.batteryVoltage = 0.0;  // 0.0 means no battery attached
+      hardwareData.batteryPercent = 0.0;
     }
     debugMessage(String("Battery voltage: ") + hardwareData.batteryVoltage + "v, percent: " + hardwareData.batteryPercent + "%",1);
   #endif
@@ -266,31 +272,6 @@ void batterySimulate()
   #endif
 }
 
-int batteryGetChargeLevel(float volts)
-// returns battery level as a percentage
-{
-  uint8_t idx = 50;
-  uint8_t prev = 0;
-  uint8_t half = 0;
-  if (volts >= 4.2)
-    return 100;
-  if (volts <= 3.2)
-    return 0;
-  while(true){
-    half = abs(idx - prev) / 2;
-    prev = idx;
-    if(volts >= batteryVoltageTable[idx]){
-      idx = idx + half;
-    }else{
-      idx = idx - half;
-    }
-    if (prev == idx){
-      break;
-    }
-  }
-  return idx;
-}
-
 void screenHelperBatteryStatus(uint16_t initialX, uint16_t initialY, uint8_t barWidth, uint8_t barHeight)
 // helper function for screenXXX() routines that draws battery charge %
 {
@@ -299,12 +280,12 @@ void screenHelperBatteryStatus(uint16_t initialX, uint16_t initialY, uint8_t bar
   if (hardwareData.batteryVoltage>0.0) 
   {
     // battery nub; width = 3pix, height = 60% of barHeight
-    display.fillRect((initialX+barWidth), (initialY+(int(barHeight/5))), 3, (int(barHeight*3/5)), SH110X_WHITE);
+    display.fillRect((initialX+barWidth), (initialY+(int(barHeight/5))), 3, (int(barHeight*3/5)), ST77XX_WHITE);
     // battery border
-    display.drawRect(initialX, initialY, barWidth, barHeight, SH110X_WHITE);
+    display.drawRect(initialX, initialY, barWidth, barHeight, ST77XX_WHITE);
     //battery percentage as rectangle fill, 1 pixel inset from the battery border
-    display.fillRect((initialX + 2), (initialY + 2), int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))), (barHeight - 4), SH110X_WHITE);
-    debugMessage(String("Battery percent displayed=") + hardwareData.batteryPercent + "%, " + int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))) + " of " + (barWidth-4) + " pixels",1);
+    display.fillRect((initialX + 2), (initialY + 2), int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))), (barHeight - 4), ST77XX_WHITE);
+    debugMessage(String("Battery percent displayed is ") + hardwareData.batteryPercent + "%, " + int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))) + " of " + (barWidth-4) + " pixels",1);
   }
   else
     debugMessage("No battery voltage for screenHelperBatteryStatus to render",1);
@@ -370,9 +351,8 @@ bool sensorCO2Read()
     screenAlert(5, ((display.height()/2)+6), "CO2 check");
     for (uint8_t loop=1; loop<=sensorReadsPerSample; loop++)
     {
-      // SCD40 datasheet suggests 5 second delay between SCD40 reads
-      // assume sensorSampleInterval will create needed delay for loop == 1 
-      if (loop > 1) delay(5000);
+      // SCD40 datasheet suggests 5 second delay before SCD40 read
+      delay(5000);
       uint16_t error = envSensor.readMeasurement(sensorData.ambientCO2, sensorData.ambientTemperatureF, sensorData.ambientHumidity);
       // handle SCD40 errors
       if (error) {
@@ -396,4 +376,54 @@ bool sensorCO2Read()
       debugMessage(String("SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",1);
   #endif
   return true;
+}
+
+void powerDisable(uint8_t deepSleepTime)
+// turns off component hardware then puts ESP32 into deep sleep mode for specified seconds
+{
+  debugMessage("powerDisable start",1);
+  
+  // power down TFT screen
+  // turn off backlite
+  digitalWrite(TFT_BACKLITE, LOW);
+
+  // turn off the TFT / I2C power supply
+  digitalWrite(TFT_I2C_POWER, LOW);
+  delay(10);
+
+  //networkDisconnect();
+
+  // power down MAX1704
+  lipoBattery.hibernate();
+  debugMessage("power off: MAX1704X",2);
+
+  // power down SCD40 by stopping potentially started measurement then power down SCD40
+  #ifndef HARDWARE_SIMULATE
+    uint16_t error = envSensor.stopPeriodicMeasurement();
+    if (error) {
+      char errorMessage[256];
+      errorToString(error, errorMessage, 256);
+      debugMessage(String(errorMessage) + " executing SCD40 stopPeriodicMeasurement()",1);
+    }
+    envSensor.powerDown();
+    debugMessage("power off: SCD40",2);
+  #endif
+
+  #if defined(ARDUINO_ADAFRUIT_FEATHER_ESP32_V2)
+    // Turn off the I2C power
+    pinMode(NEOPIXEL_I2C_POWER, OUTPUT);
+    digitalWrite(NEOPIXEL_I2C_POWER, LOW);
+    debugMessage("power off: ESP32V2 I2C",2);
+  #endif
+
+  #if defined(ARDUINO_ADAFRUIT_FEATHER_ESP32S2)
+    // Rev B board is LOW to enable
+    // Rev C board is HIGH to enable
+    digitalWrite(PIN_I2C_POWER, LOW);
+    debugMessage("power off: ESP32S2 I2C",2);
+  #endif
+
+  esp_sleep_enable_timer_wakeup(deepSleepTime*1000000); // ESP microsecond modifier
+  debugMessage(String("powerDisable complete: ESP32 deep sleep for ") + (deepSleepTime) + " seconds",1);
+  esp_deep_sleep_start();
 }
