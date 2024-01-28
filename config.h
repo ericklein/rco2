@@ -1,5 +1,5 @@
 /*
-  Project Name:   realtime_co2
+  Project Name:   rco2
   Description:    non-secret configuration data
 */
 
@@ -43,7 +43,7 @@ const float batteryVoltageMaxAlert = 4.2;
   const uint16_t sensorSampleInterval = 60;
 #else
   const uint8_t sensorReadsPerSample =  3;
-  const uint16_t sensorSampleInterval = 180;
+  const uint16_t sensorSampleInterval = 120;
 #endif
 const String co2Labels[5]={"Good", "OK", "So-So", "Poor", "Bad"};
 

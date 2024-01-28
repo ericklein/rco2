@@ -91,7 +91,7 @@ void setup()
   // Initialize environmental sensor
   if (!sensorCO2Init()) {
     debugMessage("Environment sensor failed to initialize",1);
-    screenAlert(5, ((display.height()/2)+6), "No SCD40");
+    screenAlert("No SCD40");
     // This error often occurs right after a firmware flash and reset.
     // Hardware deep sleep typically resolves it, so quickly cycle the hardware
     powerDisable(hardwareRebootInterval);
@@ -119,7 +119,7 @@ void loop()
       if (status_flags & MAX1704X_ALERTFLAG_VOLTAGE_LOW)
       {
         debugMessage("Battery below required threshold",1);
-        screenAlert(20, ((display.height()/2)+6), "Low battery");
+        screenAlert("Low battery");
         lipoBattery.clearAlertFlag(MAX1704X_ALERTFLAG_VOLTAGE_LOW); // clear the alert
         // freeze user operation. If the device is attached to charger, it will get out of this situation
         // while(1);
@@ -128,7 +128,7 @@ void loop()
     if (!sensorCO2Read())
     {
       debugMessage("SCD40 returned no/bad data",1);
-      screenAlert(5, ((display.height()/2)+6),"SCD40 read issue");
+      screenAlert("SCD40 read issue");
       // powerDisable(hardwareRebootInterval);
     }
     screenInfo("");
@@ -348,7 +348,7 @@ bool sensorCO2Read()
   #else
     char errorMessage[256];
 
-    screenAlert(5, ((display.height()/2)+6), "CO2 check");
+    screenAlert("CO2 check");
     for (uint8_t loop=1; loop<=sensorReadsPerSample; loop++)
     {
       // SCD40 datasheet suggests 5 second delay before SCD40 read
