@@ -23,6 +23,7 @@ Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 // Special glyphs for the UI
 #include "glyphs.h"
 
+// sensor support
 #ifndef SENSOR_SIMULATE
   // initialize scd40 CO2 sensor
   #include <SensirionI2CScd4x.h>
@@ -33,13 +34,16 @@ Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
   Adafruit_MAX17048 lipoBattery;
 #endif
 
+// button support
+#include <ezButton.h>
+ezButton buttonOne(buttonD1);
+ezButton buttonTwo(buttonD2);
+
+// global variables
+
 // screen layout assists
 const uint16_t xMargins = 10;
 const uint16_t yMargins = 2;
-const uint16_t yCO2 = 50;
-// const uint16_t ySparkline = 95;
-const uint16_t yTemperature = 170;
-// const uint16_t sparklineHeight = 40;
 const uint16_t batteryBarWidth = 28;
 const uint16_t batteryBarHeight = 10;
 
@@ -55,11 +59,12 @@ envData sensorData;
 typedef struct {
   float   batteryPercent;
   float   batteryVoltage;
-  uint8_t rssi;
+  //uint8_t rssi;
 } hdweData;
 hdweData hardwareData;
 
 long timeLastSample  = -(sensorSampleInterval*1000);  // set to trigger sample on first iteration of loop()
+uint8_t screenCurrent = 1;
 
 void setup()
 {
@@ -68,9 +73,9 @@ void setup()
     Serial.begin(115200);
     // wait for serial port connection
     while (!Serial);
-  #endif
 
-  debugMessage(String("RCO2 start with ") + sensorSampleInterval + " second sample interval",1);
+    debugMessage(String("RCO2 start with ") + sensorSampleInterval + " second sample interval",1);
+  #endif
 
   // initialize screen first to display hardware error messages
   // turn on backlite
@@ -101,12 +106,51 @@ void setup()
   lipoBattery.setAlertVoltages(batteryVoltageMinAlert,batteryVoltageMaxAlert);
   if (lipoBattery.isHibernating())
     lipoBattery.wake();
+
+  buttonOne.setDebounceTime(buttonDebounceDelay); 
+  buttonTwo.setDebounceTime(buttonDebounceDelay);
 }
 
 void loop()
 {
   // update current timer value
   unsigned long timeCurrent = millis();
+
+  uint8_t screenOld = screenCurrent;
+
+  // check if buttons were pressed
+  if (buttonOne.isPressed())
+  {
+    ((screenCurrent + 1) > 3) ? screenCurrent = 1 : screenCurrent ++;
+  }
+
+  if (buttonTwo.isPressed())
+  {
+    ((screenCurrent - 1) < 1) ? screenCurrent = 3 : screenCurrent --;
+  }
+
+  // update screen if needed based on button press
+  if ( screenOld != screenCurrent)
+  {
+    switch (screenCurrent)
+    {
+      case 1:
+      {
+        screenColor();
+      }
+      break;
+      case 2:
+      {
+        screenInfo();
+      }
+      break;
+      case 3:
+      {
+        screenGraph();
+      }
+      break;
+    }
+  }
 
   // is it time to read the sensor?
   if((timeCurrent - timeLastSample) >= (sensorSampleInterval * 1000)) // converting sensorSampleInterval into milliseconds
@@ -131,7 +175,25 @@ void loop()
       screenAlert("SCD40 read issue");
       // powerDisable(hardwareRebootInterval);
     }
-    screenInfo("");
+    // refresh current screen based on new sensor reading
+    switch (screenCurrent)
+    {
+      case 1:
+      {
+        screenColor();
+      }
+      break;
+      case 2:
+      {
+        screenInfo();
+      }
+      break;
+      case 3:
+      {
+        screenGraph();
+      }
+      break;
+    }
     timeLastSample = timeCurrent;
   }
 }
@@ -169,10 +231,14 @@ void screenAlert(String messageText)
   debugMessage("screenAlert end",1);
 }
 
-void screenInfo(String messageText)
+void screenInfo()
 // Display environmental information
 {
-  debugMessage("screenInfo refresh started",1);
+  // screenInfo specific screen layout assist
+  const uint16_t yCO2 = 50;
+  const uint16_t yTemperature = 170;
+
+  debugMessage("screenInfo start",1);
   
   // Clear the screen
   display.fillScreen(ST77XX_BLACK);
@@ -234,7 +300,25 @@ void screenInfo(String messageText)
   // display.print(String((int)(sensorData.ambientHumidity + 0.5)));
   // display.drawBitmap(display.width()/2+42,yTemperature-21,epd_bitmap_humidity_icon_sm4,20,28,SSD1306_WHITE);
 
-  debugMessage("screenInfo refresh complete",1);
+  debugMessage("screenInfo end",1);
+}
+
+void screenColor()
+// Represents CO2 value on screen as a single color fill
+{
+  debugMessage("screenColor start",1);
+  debugMessage("screenColor end",1);
+}
+
+void screenGraph()
+// Displays CO2 values over time as a graph
+{
+  // screenGraph specific screen layout assists
+  // const uint16_t ySparkline = 95;
+  // const uint16_t sparklineHeight = 40;
+
+  debugMessage("screenGraph start",1);
+  debugMessage("screenGraph end",1);
 }
 
 void batteryRead()
@@ -264,6 +348,7 @@ void batteryRead()
 }
 
 void batterySimulate()
+// sets global battery values from synthetic algorithms
 {
   // IMPROVEMENT: Simulate battery below SCD40 required level
   #ifdef SENSOR_SIMULATE
@@ -291,7 +376,9 @@ void screenHelperBatteryStatus(uint16_t initialX, uint16_t initialY, uint8_t bar
     debugMessage("No battery voltage for screenHelperBatteryStatus to render",1);
 }
 
-bool sensorCO2Init() {
+bool sensorCO2Init()
+// initializes CO2 sensor to read
+{
   #ifdef SENSOR_SIMULATE
     return true;
  #else
@@ -326,9 +413,9 @@ bool sensorCO2Init() {
 }
 
 void sensorCO2Simulate()
-// Simulate ranged data from the SCD40
-// Improvement - implement stable, rapid rise and fall 
+// sets global environment values from synthetic algorithms
 {
+  // Improvement - implement stable, rapid rise and fall
   #ifdef SENSOR_SIMULATE
     // Temperature
     // keep this value in C, as it is converted to F in sensorCO2Read
@@ -341,7 +428,7 @@ void sensorCO2Simulate()
 }
 
 bool sensorCO2Read()
-// reads SCD40 sensorReadsPerSample times then stores last read
+// sets global environment values from SCD40 sensor
 {
   #ifdef SENSOR_SIMULATE
     sensorCO2Simulate();

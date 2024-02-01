@@ -1,7 +1,7 @@
-# Realtime CO2 monitor
+# RCO2
 
 ### Purpose
-Realtime CO2 (aka rco2) samples and displays temperature, humidity, and CO2 (carbon dioxide) levels. It can log this data to a number of network endpoints.
+Realtime CO2, aka rco2, samples and displays temperature, humidity, and CO2 (carbon dioxide) levels.
 
 ### Features
 
