@@ -7,7 +7,7 @@
 
 // Configuration Step 2: Set debug parameters
 // comment out to turn off; 1 = summary, 2 = verbose
-#define DEBUG 1
+#define DEBUG 2
 
 // Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
@@ -16,8 +16,8 @@
 // Configuration variables that change rarely
 
 // Buttons
-const uint8_t buttonD1 = 1; // initially LOW
-const uint8_t buttonD2 = 2; // initially LOW
+const uint8_t buttonD1Pin = 1; // initially LOW
+const uint8_t buttonD2Pin = 2; // initially LOW
 
 const int buttonDebounceDelay = 50; // time in milliseconds to debounce button
 
@@ -53,6 +53,14 @@ const float batteryVoltageMaxAlert = 4.2;
   const uint16_t sensorSampleInterval = 120;
 #endif
 const String co2Labels[5]={"Good", "OK", "So-So", "Poor", "Bad"};
+// Subjective color scheme using 16 bit ('565') RGB colors a la ST77XX display
+const uint16_t co2Highlight[5] = {
+    0x07E0,   // GREEN = "Good"
+    0x07E0,   // GREEN = "OK"
+    0xFFE0,   // YELLOW = "So-So"
+    0xFC00,   // ORANGE = "Poor"
+    0xF800    // RED = "Bad"
+  };
 
 // Hardware
 // Sleep time in seconds if hardware error occurs

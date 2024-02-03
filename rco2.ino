@@ -35,9 +35,9 @@ Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 #endif
 
 // button support
-#include <ezButton.h>
-ezButton buttonOne(buttonD1);
-ezButton buttonTwo(buttonD2);
+// #include <ezButton.h>
+// ezButton buttonOne(buttonD1Pin,INPUT_PULLDOWN);
+// ezButton buttonTwo(buttonD2Pin,INPUT_PULLDOWN);
 
 // global variables
 
@@ -64,7 +64,7 @@ typedef struct {
 hdweData hardwareData;
 
 long timeLastSample  = -(sensorSampleInterval*1000);  // set to trigger sample on first iteration of loop()
-uint8_t screenCurrent = 1;
+uint8_t screenCurrent = 2;
 
 void setup()
 {
@@ -107,8 +107,10 @@ void setup()
   if (lipoBattery.isHibernating())
     lipoBattery.wake();
 
-  buttonOne.setDebounceTime(buttonDebounceDelay); 
-  buttonTwo.setDebounceTime(buttonDebounceDelay);
+  // buttonOne.setDebounceTime(buttonDebounceDelay); 
+  // buttonTwo.setDebounceTime(buttonDebounceDelay);
+  pinMode(1, INPUT_PULLDOWN);
+  pinMode(2, INPUT_PULLDOWN);
 }
 
 void loop()
@@ -119,14 +121,17 @@ void loop()
   uint8_t screenOld = screenCurrent;
 
   // check if buttons were pressed
-  if (buttonOne.isPressed())
+  // if (buttonOne.isPressed())
+  if (digitalRead(1))
   {
     ((screenCurrent + 1) > 3) ? screenCurrent = 1 : screenCurrent ++;
+    debugMessage(String("button 1 press, switch to screen ") + screenCurrent,1);
   }
-
-  if (buttonTwo.isPressed())
+  if (digitalRead(2))
+  // if (buttonTwo.isPressed())
   {
     ((screenCurrent - 1) < 1) ? screenCurrent = 3 : screenCurrent --;
+    debugMessage(String("button 2 press, switch to screen ") + screenCurrent,1);
   }
 
   // update screen if needed based on button press
@@ -240,22 +245,35 @@ void screenInfo()
 
   debugMessage("screenInfo start",1);
   
-  // Clear the screen
+ // Clear the screen
   display.fillScreen(ST77XX_BLACK);
 
   // screen helper routines
   // display battery level in the lower right corner, -3 in first parameter accounts for battery nub
   screenHelperBatteryStatus((display.width()-xMargins-batteryBarWidth-3),(display.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
 
+  // Display CO2 value, highlighting in color based on subjective "goodness"
   display.setTextColor(ST77XX_WHITE);
   display.setFont(&FreeSans24pt7b);
-  display.setCursor(0,30);
-  display.println(String("CO2:")+sensorData.ambientCO2);
+  display.setCursor(0,35);
+  display.print(String("CO2: "));
+  uint8_t co2range = ((sensorData.ambientCO2 - 400) / 400);
+  co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
+  display.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
+  display.println(sensorData.ambientCO2,0);
+  display.setTextColor(ST77XX_WHITE);
+  
+  // Display temperature with symbol from custom glyphs
   display.setFont(&FreeSans18pt7b);
-  display.setCursor(0,60);
-  display.println(String("Temp:")+sensorData.ambientTemperatureF+"F");
-  display.setCursor(0,90);
-  display.println(String("Humidity: ")+sensorData.ambientHumidity+"%");
+  display.setCursor(0,75);
+  display.print(sensorData.ambientTemperatureF,1);
+  display.drawBitmap(75,51,epd_bitmap_temperatureF_icon_sm,20,28,0xFFFF);
+  
+  // Display humidity with symbol from custom glyphs
+  display.setFont(&FreeSans18pt7b); 
+  display.setCursor(150,75);
+  display.print(sensorData.ambientHumidity,0); 
+  display.drawBitmap(195,50,epd_bitmap_humidity_icon_sm4,20,28,0xFFFF);
 
   // // display sparkline
   // screenHelperSparkLine(xMargins,ySparkline,(display.width() - (2* xMargins)),sparklineHeight);
@@ -307,6 +325,7 @@ void screenColor()
 // Represents CO2 value on screen as a single color fill
 {
   debugMessage("screenColor start",1);
+  screenAlert("screenColor");
   debugMessage("screenColor end",1);
 }
 
@@ -318,6 +337,7 @@ void screenGraph()
   // const uint16_t sparklineHeight = 40;
 
   debugMessage("screenGraph start",1);
+  screenAlert("screenGraph");
   debugMessage("screenGraph end",1);
 }
 
@@ -441,6 +461,8 @@ bool sensorCO2Read()
       // SCD40 datasheet suggests 5 second delay before SCD40 read
       delay(5000);
       uint16_t error = envSensor.readMeasurement(sensorData.ambientCO2, sensorData.ambientTemperatureF, sensorData.ambientHumidity);
+      //convert temperature from Celcius to Fahrenheit
+      sensorData.ambientTemperatureF = (sensorData.ambientTemperatureF * 1.8) + 32;
       // handle SCD40 errors
       if (error) {
         errorToString(error, errorMessage, 256);
@@ -450,13 +472,12 @@ bool sensorCO2Read()
       if (sensorData.ambientCO2<400 || sensorData.ambientCO2>6000)
       {
         debugMessage("SCD40 CO2 reading out of range",1);
+        (sensorData.ambientCO2<400) ? sensorData.ambientCO2 = 400 : sensorData.ambientCO2 = 6000;
         return false;
       }
-      debugMessage(String("SCD40 read ") + loop + " of " + sensorReadsPerSample + " : " + sensorData.ambientTemperatureF + "C, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",2);
+      debugMessage(String("SCD40 read ") + loop + " of " + sensorReadsPerSample + " : " + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",2);
     }
   #endif
-  //convert temperature from Celcius to Fahrenheit
-  sensorData.ambientTemperatureF = (sensorData.ambientTemperatureF * 1.8) + 32;
   #ifdef SENSOR_SIMULATE
       debugMessage(String("SIMULATED SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",1);
   #else
