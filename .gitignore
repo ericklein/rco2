@@ -1,0 +1,10 @@
+secrets.h
+data/
+__vm/
+.vs/
+*.sln
+*.vcxproj*
+supporting material/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
