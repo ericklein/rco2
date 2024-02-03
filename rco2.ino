@@ -35,9 +35,9 @@ Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 #endif
 
 // button support
-// #include <ezButton.h>
-// ezButton buttonOne(buttonD1Pin,INPUT_PULLDOWN);
-// ezButton buttonTwo(buttonD2Pin,INPUT_PULLDOWN);
+#include <ezButton.h>
+ezButton buttonOne(buttonD1Pin,INPUT_PULLDOWN);
+ezButton buttonTwo(buttonD2Pin,INPUT_PULLDOWN);
 
 // global variables
 
@@ -107,10 +107,8 @@ void setup()
   if (lipoBattery.isHibernating())
     lipoBattery.wake();
 
-  // buttonOne.setDebounceTime(buttonDebounceDelay); 
-  // buttonTwo.setDebounceTime(buttonDebounceDelay);
-  pinMode(1, INPUT_PULLDOWN);
-  pinMode(2, INPUT_PULLDOWN);
+  buttonOne.setDebounceTime(buttonDebounceDelay); 
+  buttonTwo.setDebounceTime(buttonDebounceDelay);
 }
 
 void loop()
@@ -120,15 +118,15 @@ void loop()
 
   uint8_t screenOld = screenCurrent;
 
+  buttonOne.loop();
+  buttonTwo.loop();
   // check if buttons were pressed
-  // if (buttonOne.isPressed())
-  if (digitalRead(1))
+  if (buttonOne.isPressed())
   {
     ((screenCurrent + 1) > 3) ? screenCurrent = 1 : screenCurrent ++;
     debugMessage(String("button 1 press, switch to screen ") + screenCurrent,1);
   }
-  if (digitalRead(2))
-  // if (buttonTwo.isPressed())
+  if (buttonTwo.isPressed())
   {
     ((screenCurrent - 1) < 1) ? screenCurrent = 3 : screenCurrent --;
     debugMessage(String("button 2 press, switch to screen ") + screenCurrent,1);
@@ -174,10 +172,10 @@ void loop()
         // while(1);
       }
     }
+    screenAlert("CO2 check");
     if (!sensorCO2Read())
     {
-      debugMessage("SCD40 returned no/bad data",1);
-      screenAlert("SCD40 read issue");
+      screenAlert("SCD40 bad read");
       // powerDisable(hardwareRebootInterval);
     }
     // refresh current screen based on new sensor reading
@@ -450,12 +448,12 @@ void sensorCO2Simulate()
 bool sensorCO2Read()
 // sets global environment values from SCD40 sensor
 {
+  debugMessage("sensorCO2 read start",2);
   #ifdef SENSOR_SIMULATE
     sensorCO2Simulate();
   #else
     char errorMessage[256];
 
-    screenAlert("CO2 check");
     for (uint8_t loop=1; loop<=sensorReadsPerSample; loop++)
     {
       // SCD40 datasheet suggests 5 second delay before SCD40 read
@@ -466,12 +464,12 @@ bool sensorCO2Read()
       // handle SCD40 errors
       if (error) {
         errorToString(error, errorMessage, 256);
-        debugMessage(String(errorMessage) + " error during SCD4X read",1);
+        debugMessage(String("SCD40 read error: ") + errorMessage,1);
         return false;
       }
       if (sensorData.ambientCO2<400 || sensorData.ambientCO2>6000)
       {
-        debugMessage("SCD40 CO2 reading out of range",1);
+        debugMessage(String("SCD40 CO2 read out of range: ") + sensorData.ambientCO2,1);
         (sensorData.ambientCO2<400) ? sensorData.ambientCO2 = 400 : sensorData.ambientCO2 = 6000;
         return false;
       }
