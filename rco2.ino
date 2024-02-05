@@ -10,7 +10,7 @@
 // private credentials for network, MQTT
 #include "secrets.h"
 
-// screen support
+// screen support (ST7789 240x135 pixels color TFT)
 #include <Adafruit_ST7789.h>
 Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 
@@ -229,6 +229,9 @@ void screenAlert(String messageText)
   if (width >= display.width()) {
     debugMessage(String("ERROR: screenAlert '") + messageText + "' is " + abs(display.width()-width) + " pixels too long", 1);
   }
+  // test: clear a band around the text to be displayed
+  // display.fillRect(((display.width() / 2) - ((width / 2) + 10)), ((display.height() / 2) - ((height / 2) + 3)), width + 20, height + 10, ST77XX_BLACK);
+  // display text
   display.setCursor(display.width() / 2 - width / 2, display.height() / 2 + height / 2);
   display.print(messageText);
   debugMessage("screenAlert end",1);
@@ -323,7 +326,12 @@ void screenColor()
 // Represents CO2 value on screen as a single color fill
 {
   debugMessage("screenColor start",1);
-  screenAlert("screenColor");
+  uint8_t co2range = ((sensorData.ambientCO2 - 400) / 400);
+  co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
+  display.fillScreen(co2Highlight[co2range]);  // Use highlight color look-up table
+   // screen helper routines
+  // display battery level in the lower right corner, -3 in first parameter accounts for battery nub
+  screenHelperBatteryStatus((display.width()-xMargins-batteryBarWidth-3),(display.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
   debugMessage("screenColor end",1);
 }
 
