@@ -7,11 +7,11 @@
 
 // Configuration Step 2: Set debug parameters
 // comment out to turn off; 1 = summary, 2 = verbose
-#define DEBUG 2
+// #define DEBUG 2
 
 // Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
-// #define SENSOR_SIMULATE
+#define SENSOR_SIMULATE
 
 // Configuration variables that change rarely
 
@@ -30,8 +30,8 @@ const float batteryVoltageMaxAlert = 4.2;
 
 // Simulation values
 #ifdef SENSOR_SIMULATE
-  const uint16_t sensorTempMin =      1500; // will be divided by 100.0 to give floats
-  const uint16_t sensorTempMax =      2500;
+  const uint16_t sensorTempMin =      1500; // will be divided by 100.0 to give floats in Celsius
+  const uint16_t sensorTempMax =      2500; // also in Celsius
   const uint16_t sensorHumidityMin =  500; // will be divided by 100.0 to give floats
   const uint16_t sensorHumidityMax =  9500;
   const uint16_t sensorCO2Min =       400;
@@ -65,3 +65,46 @@ const uint16_t co2Highlight[5] = {
 // Hardware
 // Sleep time in seconds if hardware error occurs
 const uint8_t hardwareRebootInterval = 10;
+
+//                       ***** BOARD SUPPORT *****
+// Here is where we define characteristics specific to the various
+// supported microcontroller boards, as may be required.  Wherever possible 
+// these defined symbols should match those provided by the board for the
+// Arduino IDE, and so don't need to be explicitly defined here (just used)
+
+//                        ------------------------
+// Adafruit ESP32 Feather V2 (Adafruit Product ID: 5400)
+#ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32_V2  
+  // With this board RCO2 relies on a separate TFT breakout board and so  
+  // needs declaration of the digital I/O pins used to drive the display
+  #define TFT_CS        15
+  #define TFT_RST       32 // Or set to -1 and connect to Arduino RESET pin
+  #define TFT_DC        14
+
+  // Other board-specific aspects
+  // *) Battery monitor voltage divider is connected to pin A13. To measure battery voltage
+  //    read pin A13's analog voltage and double it.
+  // *) To enable I2C (and the onboard Neopixel), pull the NEOPIXEL_I2C_POWER pin HIGH.
+  //    The Arduino board configuration does this automatically.
+  // *) The user-readable pusbutton on the board is connected to a pin defined for Arduino
+  //    as BUTTON (labeled "SW38" on the board itself). The button is pulled high by default
+  #define VBATPIN A13  // Used by battery management routines
+  const uint8_t buttonPin = BUTTON;
+  #define BUTTON_MODE  INPUT_PULLUP    // Onboard button is pulled high
+
+#endif // End ARDUINO_ADAFRUIT_FEATHER_ESP32_V22
+
+
+//                        ------------------------
+// Adafruit ESP32-S3 Reverse TFT Feather (Adafruit Product ID: 5691)
+#ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32S3_REVTFT 
+  // This board has an onboard 240x135 TFT display and MAX17048 LiPo battery monitor.
+  // Both are pre-configured so no additional info is required
+
+  // Two built-in buttons (labeled D1 and D2 on the board) are available, tied to
+  // digital I/O pins 1 and 2 respectively. We only need one of them for cycling
+  // through the display screens. Both buttons are pulled low by default.
+  const uint8_t buttonPin = 2;
+  #define BUTTON_MODE  INPUT_PULLDOWN  // Onboard button is pulled low
+
+#endif  // End ARDUINO_ADAFRUIT_ESP32S3_REVTFT
