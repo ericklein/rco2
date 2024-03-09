@@ -30,6 +30,12 @@ ezButton button(buttonPin,BUTTON_MODE);  // Hardcoded for the ESP32S3_REVTFT   D
   #include <SensirionI2CScd4x.h>
   #include <Wire.h>
   SensirionI2CScd4x envSensor;
+
+  // ESP32S3 REV TFT has an onboard MAX17048 battery monitor
+  #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32S3_REVTFT
+    #include "Adafruit_MAX1704X.h"
+    Adafruit_MAX17048 lipoBattery;
+  #endif
 #endif
 
 // For the 1.14" TFT with ST7789
@@ -80,7 +86,7 @@ void setup() {
     // turn on the TFT / I2C power supply
     pinMode(TFT_I2C_POWER, OUTPUT);
     digitalWrite(TFT_I2C_POWER, HIGH);
-    delay(10);
+    // delay(10);
 
   #endif
   
@@ -103,9 +109,19 @@ void setup() {
 
   // Initialize SCD40 sensor
   status = sensorCO2Init();
+  if(status == false) {
+    Serial.println("Error initializing CO2 sensor");
+    tft.setCursor(0,75);
+    tft.println("NO SCD40!");
+  }
 
   // Initialize battery monitor
   status = batteryInit();
+    if(status == false) {
+    Serial.println("Error initializing battery");
+    tft.setCursor(0,110);
+    tft.println("NO BATTERY!");
+  }
 
   Serial.println("Waiting for first measurement... (5 sec)");
 
@@ -289,17 +305,36 @@ void sensorCO2Simulate()
   #endif
 }
 
+// Initialize whatever battery monitoring sensor/controller may be
+// available.
 bool batteryInit()
 {
   #ifdef SENSOR_SIMULATE
     return(true);  // Simulating, nothing to be done
   #else
+    bool status;
 
+    // Feather ESP32 V2 battery monitoring
     #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32_V2
-      // Feather ESP32 V2 has no battery sensor/controller
+      // Feather ESP32 V2 has no battery sensor/controller, just a simple
+      // built-in voltage divider hooked to an analog pin
       return(true); // Nothing to do on ESP32 V2
     #endif
 
+    // Feather ESP32S3 Rev TFT battery monitoring (via onboard MAX17048)
+    #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32S3_REVTFT
+      // initialize battery monitor
+      status = lipoBattery.begin();
+      if(!status) {
+        // Couldn't initialize MAX17048, initialization failed
+        Serial.println("Failed to initialize MAX17048 battery manager!");
+        return(false);
+      }
+      Serial.println(String("Found MAX1704X at I2C address 0x") + lipoBattery.getChipID());
+      if (lipoBattery.isHibernating()) lipoBattery.wake();
+      lipoBattery.setAlertVoltages(batteryVoltageMinAlert,batteryVoltageMaxAlert);
+      return(true);
+    #endif
   #endif
 }
 
@@ -309,7 +344,7 @@ bool batteryRead()
     batterySimulate();
     return(true);
   #else
-
+    Serial.println("Reading battery");
     // Feather ESP32 V2 with simple voltage divider battery monitor
     #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32_V2
       float measuredvbat = analogReadMilliVolts(VBATPIN);
@@ -321,6 +356,14 @@ bool batteryRead()
       float vmax = batteryVoltageMaxAlert;
       hardwareData.batteryPercent = 100.0*(measuredvbat - vmin)/(vmax - vmin);
       hardwareData.batteryVoltage = measuredvbat;
+      return(true);
+    #endif
+
+    // Feather ESP32S3 with Reverse TFT, which manages the battery via an
+    // onboard MAX17048 controller
+    #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32S3_REVTFT
+      hardwareData.batteryPercent = lipoBattery.cellPercent();
+      hardwareData.batteryVoltage = lipoBattery.cellVoltage();
       return(true);
     #endif
 

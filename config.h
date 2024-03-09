@@ -11,7 +11,7 @@
 
 // Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
-#define SENSOR_SIMULATE
+// #define SENSOR_SIMULATE
 
 // Configuration variables that change rarely
 
