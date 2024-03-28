@@ -7,16 +7,17 @@
 #include <Adafruit_GFX.h>         // Core graphics library
 #include <Adafruit_ST7789.h>      // Hardware-specific library for ST7789
 
-// hardware and internet configuration parameters
-#include "config.h"
+// Set hardware & software configuration parameters
+#include "config.h"   // General configuration values
+#include "secrets.h"  // Deployment private info
 
+// Fonts used by various screen display routines
 #include <Fonts/FreeSans18pt7b.h>
 #include <Fonts/FreeSans24pt7b.h>
 
 // EZButton library for the onboard button
-// ESP32 V2 defines its single button (SW38) input pin as BUTTON
 #include <ezButton.h>
-ezButton button(buttonPin,BUTTON_MODE);  // Hardcoded for the ESP32S3_REVTFT   DJB: FIX THIS!
+ezButton button(buttonPin,BUTTON_MODE);  // Based on settings in config.h
 
 // Utility class for easy handling aggregate sensor datta
 #include "measure.h"
@@ -69,7 +70,7 @@ const uint16_t batteryBarHeight = 10;
 long timeLastSample  = -(sensorSampleInterval*1000);  // set to trigger sample on first iteration of loop()
 
 // Multiple Screen management
-#define NUMSCREENS 3  // Total number of supported screens
+#define NUMSCREENS 4  // Total number of supported screens
 uint8_t currentScreen = 0;  // Current screen, initialized here to screen #0
 
 void setup() {
@@ -86,7 +87,7 @@ void setup() {
     // turn on the TFT / I2C power supply
     pinMode(TFT_I2C_POWER, OUTPUT);
     digitalWrite(TFT_I2C_POWER, HIGH);
-    // delay(10);
+    delay(10);
 
   #endif
   
@@ -203,8 +204,10 @@ bool sensorCO2Init()
     error = envSensor.getSensorAltitude(sensor_altitude);
     Serial.print("SCD40 Altitude: ");
     Serial.println(sensor_altitude);
-    error = envSensor.setTemperatureOffset(0);
-    error = envSensor.setSensorAltitude(400);
+
+    // Set temperature offset and site altitude from values in secrets.h
+    error = envSensor.setTemperatureOffset(TEMPC_OFFSET);
+    error = envSensor.setSensorAltitude(SITE_ALTITUDE);
 
     // Start Measurement.  For high power mode, with a fixed update interval of 5 seconds
     // (the typical usage mode), use startPeriodicMeasurement().  For low power mode, with
@@ -387,7 +390,8 @@ void displayCurrentData(bool firstTime)
   // Display current CO2 reading
   tft.fillScreen(ST77XX_BLACK);
   tft.setTextSize(1);  // Needed so custom fonts scale properly
-  tft.setFont(&FreeSans24pt7b);
+  tft.setFont(&FreeSans24pt7b);    
+
   tft.setCursor(0,35);
   tft.print("CO2: ");
   uint8_t co2range = ((sensorData.ambientCO2 - 400) / 400);
@@ -501,6 +505,9 @@ void updateDisplay(bool firstTime)
     case 2:
       screenSaver(firstTime);
       break;
+    case 3:
+      screenColor(firstTime);
+      break;
     default:
       // This shouldn't happen, but if it does...
       displayCurrentData(firstTime);
@@ -528,4 +535,18 @@ void screenSaver(bool firstTime)
   tft.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
   tft.println(sensorData.ambientCO2);
   tft.setTextColor(ST77XX_WHITE);
+}
+
+void screenColor(bool firstTime)
+// Represents CO2 value on screen as a single color fill
+{
+  // debugMessage("screenColor start",1);
+  uint8_t co2range = ((sensorData.ambientCO2 - 400) / 400);
+  co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
+  tft.fillScreen(co2Highlight[co2range]);  // Use highlight color look-up table
+  
+  // screen helper routines
+  // display battery level in the lower right corner, -3 in first parameter accounts for battery nub
+  screenHelperBatteryStatus((tft.width()-xMargins-batteryBarWidth-3),(tft.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
+  // debugMessage("screenColor end",1);
 }

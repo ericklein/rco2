@@ -15,10 +15,7 @@
 
 // Configuration variables that change rarely
 
-// Buttons
-const uint8_t buttonD1Pin = 1; // initially LOW
-const uint8_t buttonD2Pin = 2; // initially LOW
-
+// Hardware-independent Button settings
 const int buttonDebounceDelay = 50; // time in milliseconds to debounce button
 
 // Display
@@ -42,16 +39,14 @@ const float batteryVoltageMaxAlert = 4.2;
 #endif
 
 // CO2 sensor
-//sample timing
+// sample timing
 #ifdef DEBUG
-	// number of times SCD40 is read, last read is the sample value
-	const uint8_t sensorReadsPerSample =	1;
 	// time between samples in seconds
   const uint16_t sensorSampleInterval = 60;
 #else
-  const uint8_t sensorReadsPerSample =  3;
   const uint16_t sensorSampleInterval = 120;
 #endif
+
 const String co2Labels[5]={"Good", "OK", "So-So", "Poor", "Bad"};
 // Subjective color scheme using 16 bit ('565') RGB colors a la ST77XX display
 const uint16_t co2Highlight[5] = {
@@ -61,10 +56,6 @@ const uint16_t co2Highlight[5] = {
     0xFC00,   // ORANGE = "Poor"
     0xF800    // RED = "Bad"
   };
-
-// Hardware
-// Sleep time in seconds if hardware error occurs
-const uint8_t hardwareRebootInterval = 10;
 
 //                       ***** BOARD SUPPORT *****
 // Here is where we define characteristics specific to the various
@@ -76,7 +67,8 @@ const uint8_t hardwareRebootInterval = 10;
 // Adafruit ESP32 Feather V2 (Adafruit Product ID: 5400)
 #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32_V2  
   // With this board RCO2 relies on a separate TFT breakout board and so  
-  // needs declaration of the digital I/O pins used to drive the display
+  // needs declaration of the digital I/O pins used to drive the display.
+  // This will vary for any particular device build so set it correctly here.
   #define TFT_CS        15
   #define TFT_RST       32 // Or set to -1 and connect to Arduino RESET pin
   #define TFT_DC        14
@@ -99,7 +91,7 @@ const uint8_t hardwareRebootInterval = 10;
 // Adafruit ESP32-S3 Reverse TFT Feather (Adafruit Product ID: 5691)
 #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32S3_REVTFT 
   // This board has an onboard 240x135 TFT display and MAX17048 LiPo battery monitor.
-  // Both are pre-configured so no additional info is required
+  // Both are pre-configured so no additional wiring or pin info is required
 
   // Two built-in buttons (labeled D1 and D2 on the board) are available, tied to
   // digital I/O pins 1 and 2 respectively. We only need one of them for cycling

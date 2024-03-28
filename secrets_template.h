@@ -7,3 +7,4 @@
 // set site altitude, in meters, to calibrate the SCD40
 // example
 // const uint16_t SITE_ALTITUDE = 236; // Pasadena, CA (SuperCon!)
+// const float    TEMPC_OFFSET  = 0.0; // SCD40 temperature offset (see datasheet)
