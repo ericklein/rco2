@@ -7,7 +7,7 @@
 
 // Configuration Step 2: Set debug parameters
 // comment out to turn off; 1 = summary, 2 = verbose
-#define DEBUG 2
+// #define DEBUG 2
 
 // Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
@@ -40,23 +40,17 @@ const float batteryVoltageMaxAlert = 4.2;
   const uint16_t sensorTempMax =      2500;
   const uint16_t sensorHumidityMin =  500; // will be divided by 100.0 to give floats
   const uint16_t sensorHumidityMax =  9500;
-  const uint16_t sensorCO2Min =       400;
-  const uint16_t sensorCO2Max =       3000;
 
   const uint16_t batterySimVoltageMin = 370; // will be divided by 100.0 to give floats
   const uint16_t batterySimVoltageMax = 420;
 #endif
 
 // CO2 sensor
-//sample timing
 #ifdef DEBUG
-	// number of times SCD40 is read, last read is the sample value
-	const uint8_t  sensorReadsPerSample =	1;
 	// time between samples in seconds
-  const uint16_t sensorSampleInterval = 60;
+  const uint16_t sensorSampleInterval = 30;
 #else
-  const uint8_t   sensorReadsPerSample =  3;
-  const uint16_t  sensorSampleInterval = 120;
+  const uint16_t sensorSampleInterval = 60;
 #endif
 const String co2Labels[5]={"Good", "OK", "So-So", "Poor", "Bad"};
 // Subjective color scheme using 16 bit ('565') RGB colors a la ST77XX display
@@ -67,6 +61,9 @@ const uint16_t co2Highlight[5] = {
     0xFC00,   // ORANGE = "Poor"
     0xF800    // RED = "Bad"
   };
+const uint16_t sensorCO2Min =      400;
+const uint16_t sensorCO2Max =      2000;
+const uint16_t sensorTempCOffset = 0; // in C
 
 // Hardware
 // Sleep time in seconds if hardware error occurs

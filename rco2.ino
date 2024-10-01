@@ -16,11 +16,10 @@
 // screen support (ST7789 240x135 pixels color TFT)
 #include <Adafruit_ST7789.h>
 Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
-
 #include <Fonts/FreeSans18pt7b.h>
 #include <Fonts/FreeSans24pt7b.h>
 // Special glyphs for the UI
-#include "glyphs.h"
+#include "Fonts/glyphs.h"
 
 // sensor support
 #ifndef SENSOR_SIMULATE
@@ -88,26 +87,28 @@ void setup()
 
   screenAlert("Initializing");
 
-  // initialize battery monitor if available
-  if (batteryInit())
-  {
-    lipoBattery.setAlertVoltages(batteryVoltageMinAlert,batteryVoltageMaxAlert);
-    if (lipoBattery.isHibernating())
-      lipoBattery.wake(); 
-    // Check if battery is supplying enough voltage to drive the SCD40
-    if (lipoBattery.isActiveAlert())
-    {
-      uint8_t status_flags = lipoBattery.getAlertStatus();
-      if (status_flags & MAX1704X_ALERTFLAG_VOLTAGE_LOW)
-      {
-        debugMessage("Battery below required threshold",1);
-        screenAlert("Charge device");
-        lipoBattery.clearAlertFlag(MAX1704X_ALERTFLAG_VOLTAGE_LOW); // clear the alert
-        // stop user operation. If the device is attached to charger, it will get out of this situation
-        while(1);
-      }
-    }   
-  }
+  batteryInit();
+
+  // // initialize battery monitor if available
+  // if (batteryInit())
+  // {
+  //   lipoBattery.setAlertVoltages(batteryVoltageMinAlert,batteryVoltageMaxAlert);
+  //   if (lipoBattery.isHibernating())
+  //     lipoBattery.wake(); 
+  //   // Check if battery is supplying enough voltage to drive the SCD40
+  //   if (lipoBattery.isActiveAlert())
+  //   {
+  //     uint8_t status_flags = lipoBattery.getAlertStatus();
+  //     if (status_flags & MAX1704X_ALERTFLAG_VOLTAGE_LOW)
+  //     {
+  //       debugMessage("Battery below required threshold",1);
+  //       screenAlert("Charge device");
+  //       lipoBattery.clearAlertFlag(MAX1704X_ALERTFLAG_VOLTAGE_LOW); // clear the alert
+  //       // stop user operation. If the device is attached to charger, it will get out of this situation
+  //       while(1);
+  //     }
+  //   }   
+  // }
 
   // Initialize environmental sensor
   if (!sensorCO2Init()) {
@@ -138,23 +139,23 @@ void loop()
   // is it time to read the sensor?
   if((timeCurrent - timeLastSample) >= (sensorSampleInterval * 1000)) // converting sensorSampleInterval into milliseconds
   {
-    // Check if battery is supplying enough voltage to drive the SCD40
-    if (lipoBattery.isActiveAlert())
-    {
-      uint8_t status_flags = lipoBattery.getAlertStatus();
-      if (status_flags & MAX1704X_ALERTFLAG_VOLTAGE_LOW)
-      {
-        debugMessage("Battery below required threshold",1);
-        screenAlert("Charge device");
-        lipoBattery.clearAlertFlag(MAX1704X_ALERTFLAG_VOLTAGE_LOW); // clear the alert
-        // stop user operation. If the device is attached to charger, it will get out of this situation
-        while(1);
-      }
-    }
+    // // Check if battery is supplying enough voltage to drive the SCD40
+    // if (lipoBattery.isActiveAlert())
+    // {
+    //   uint8_t status_flags = lipoBattery.getAlertStatus();
+    //   if (status_flags & MAX1704X_ALERTFLAG_VOLTAGE_LOW)
+    //   {
+    //     debugMessage("Battery below required threshold",1);
+    //     screenAlert("Charge device");
+    //     lipoBattery.clearAlertFlag(MAX1704X_ALERTFLAG_VOLTAGE_LOW); // clear the alert
+    //     // stop user operation. If the device is attached to charger, it will get out of this situation
+    //     while(1);
+    //   }
+    // }
 
     if (!sensorCO2Read())
     {
-      screenAlert("SCD40 bad read");
+      screenAlert("CO2 read fail");
       // powerDisable(hardwareRebootInterval);
     }
     else
@@ -185,7 +186,7 @@ void debugMessage(String messageText, int messageLevel)
 
 void screenUpdate(bool firstTime) 
 {
-  switch(currentScreen) {
+  switch(screenCurrent) {
     case 0:
       screenSaver();
       break;
@@ -203,7 +204,7 @@ void screenUpdate(bool firstTime)
       break;
     default:
       // This shouldn't happen, but if it does...
-      displayCurrentData();
+      screenCurrentData();
       debugMessage("bad screen ID",1);
       break;
   }
@@ -212,7 +213,7 @@ void screenUpdate(bool firstTime)
 void screenAlert(String messageText)
 // Display error message centered on screen
 {
-  debugMessage("screenAlert start",1);
+  debugMessage(String("screenAlert '") + messageText + "' start",1);
   // Clear the screen
   display.fillScreen(ST77XX_BLACK);
 
@@ -225,9 +226,7 @@ void screenAlert(String messageText)
   if (width >= display.width()) {
     debugMessage(String("ERROR: screenAlert '") + messageText + "' is " + abs(display.width()-width) + " pixels too long", 1);
   }
-  // test: clear a band around the text to be displayed
-  // display.fillRect(((display.width() / 2) - ((width / 2) + 10)), ((display.height() / 2) - ((height / 2) + 3)), width + 20, height + 10, ST77XX_BLACK);
-  // display text
+
   display.setCursor(display.width() / 2 - width / 2, display.height() / 2 + height / 2);
   display.print(messageText);
   debugMessage("screenAlert end",1);
@@ -284,9 +283,6 @@ void screenColor()
   uint8_t co2range = ((sensorData.ambientCO2 - 400) / 400);
   co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
   display.fillScreen(co2Highlight[co2range]);  // Use highlight color look-up table
-   // screen helper routines
-  // display battery level in the lower right corner, -3 in first parameter accounts for battery nub
-  screenHelperBatteryStatus((display.width()-xMargins-batteryBarWidth-3),(display.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
   debugMessage("screenColor end",1);
 }
 
@@ -294,21 +290,23 @@ void screenSaver()
 {
   int16_t x, y;
 
+  debugMessage("screenSaver start",1);
   // Display current CO2 reading at a random location ("screen saver")
-  tft.fillScreen(ST77XX_BLACK);
-  tft.setTextSize(1);  // Needed so custom fonts scale properly
-  tft.setFont(&FreeSans18pt7b);
+  display.fillScreen(ST77XX_BLACK);
+  display.setTextSize(1);  // Needed so custom fonts scale properly
+  display.setFont(&FreeSans18pt7b);
 
   // Pick a random location that'll show up
   x = random(xMargins,240-xMargins-64);  // Guessing 64 is room for 4 digit CO2 value
   y = random(35,135-yMargins);
-  tft.setCursor(x,y);
+  display.setCursor(x,y);
 
   uint8_t co2range = ((sensorData.ambientCO2 - 400) / 400);
   co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
-  tft.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
-  tft.println(sensorData.ambientCO2);
-  tft.setTextColor(ST77XX_WHITE);
+  display.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
+  display.println(sensorData.ambientCO2);
+  display.setTextColor(ST77XX_WHITE);
+  debugMessage("screenSaver end",1);
 }
 
 // Displays minimum, average, and maximum values for CO2, temperature and humidity
@@ -318,54 +316,54 @@ void screenAggregateData()
   uint8_t co2range;
 
   // Clear screen and display row/column labels
-  tft.fillScreen(ST77XX_BLACK);
-  tft.setFont();  // Revert to built-in font
-  tft.setTextSize(2);
+  display.fillScreen(ST77XX_BLACK);
+  display.setFont();  // Revert to built-in font
+  display.setTextSize(2);
 
-  tft.setCursor( 70, 10); tft.print("CO2");
-  tft.setCursor(130, 10); tft.print("  F");
-  tft.setCursor(200, 10); tft.print("RH");
+  display.setCursor( 70, 10); display.print("CO2");
+  display.setCursor(130, 10); display.print("  F");
+  display.setCursor(200, 10); display.print("RH");
 
-  tft.setCursor( 10, 40); tft.print("Max");
-  tft.setCursor( 10, 70); tft.print("Avg");
-  tft.setCursor( 10,100); tft.print("Min");
+  display.setCursor( 10, 40); display.print("Max");
+  display.setCursor( 10, 70); display.print("Avg");
+  display.setCursor( 10,100); display.print("Min");
 
   // Fill in the maximum values row
-  tft.setCursor( 70, 40);
+  display.setCursor( 70, 40);
   co2range = ((totalCO2.getMax() - 400) / 400);
   co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
-  tft.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
-  tft.print(totalCO2.getMax(),0);
-  tft.setTextColor(ST77XX_WHITE);
+  display.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
+  display.print(totalCO2.getMax(),0);
+  display.setTextColor(ST77XX_WHITE);
   
-  tft.setCursor(130, 40); tft.print(totalTemperatureF.getMax(),1);
-  tft.setCursor(200, 40); tft.print(totalHumidity.getMax(),0);
+  display.setCursor(130, 40); display.print(totalTemperatureF.getMax(),1);
+  display.setCursor(200, 40); display.print(totalHumidity.getMax(),0);
 
   // Fill in the average value row
-  tft.setCursor( 70, 70);
+  display.setCursor( 70, 70);
   co2range = ((totalCO2.getAverage() - 400) / 400);
   co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
-  tft.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
-  tft.print(totalCO2.getAverage(),0);
-  tft.setTextColor(ST77XX_WHITE);
+  display.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
+  display.print(totalCO2.getAverage(),0);
+  display.setTextColor(ST77XX_WHITE);
 
-  tft.setCursor(130, 70); tft.print(totalTemperatureF.getAverage(),1);
-  tft.setCursor(200, 70); tft.print(totalHumidity.getAverage(),0);
+  display.setCursor(130, 70); display.print(totalTemperatureF.getAverage(),1);
+  display.setCursor(200, 70); display.print(totalHumidity.getAverage(),0);
 
   // Fill in the minimum value row
-  tft.setCursor( 70,100);   
+  display.setCursor( 70,100);   
   co2range = ((totalCO2.getMin() - 400) / 400);
   co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
-  tft.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
-  tft.print(totalCO2.getMin(),0);
-  tft.setTextColor(ST77XX_WHITE);
+  display.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
+  display.print(totalCO2.getMin(),0);
+  display.setTextColor(ST77XX_WHITE);
 
-  tft.setCursor(130,100); tft.print(totalTemperatureF.getMin(),1);
-  tft.setCursor(200,100); tft.print(totalHumidity.getMin(),0);
+  display.setCursor(130,100); display.print(totalTemperatureF.getMin(),1);
+  display.setCursor(200,100); display.print(totalHumidity.getMin(),0);
 
 
   // Display current battery level on bottom right of screen
-  screenHelperBatteryStatus((tft.width()-xMargins-batteryBarWidth-3),(tft.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
+  screenHelperBatteryStatus((display.width()-xMargins-batteryBarWidth-3),(display.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
 }
 
 void screenGraph()
@@ -376,7 +374,7 @@ void screenGraph()
   // const uint16_t sparklineHeight = 40;
 
   debugMessage("screenGraph start",1);
-  screenAlert("screenGraph");
+  screenAlert("Graph");
   debugMessage("screenGraph end",1);
 }
 
@@ -386,27 +384,26 @@ bool batteryInit()
   #ifdef SENSOR_SIMULATE
     return(true);  // Simulating, nothing to be done
   #else
-    bool status;
-
     // Feather ESP32 V2 battery monitoring
     #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32_V2
       // Feather ESP32 V2 has no battery sensor/controller, just a simple
       // built-in voltage divider hooked to an analog pin
       return(true); // Nothing to do on ESP32 V2
     #endif
-
     // Feather ESP32S3 Rev TFT battery monitoring (via onboard MAX17048)
     #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32S3_REVTFT
+      bool status;
       // initialize battery monitor
       status = lipoBattery.begin();
       if(!status) {
         // Couldn't initialize MAX17048, initialization failed
-        Serial.println("Failed to initialize MAX17048 battery manager!");
+        debugMessage("Failed to initialize MAX17048",1);
         return(false);
       }
-      Serial.println(String("Found MAX1704X at I2C address 0x") + lipoBattery.getChipID());
+      debugMessage(String("Found MAX1704X at I2C address 0x") + lipoBattery.getChipID(),1);
       if (lipoBattery.isHibernating()) lipoBattery.wake();
       lipoBattery.setAlertVoltages(batteryVoltageMinAlert,batteryVoltageMaxAlert);
+      debugMessage(String("Low voltage alert set to ") + batteryVoltageMinAlert + " v",1);
       return(true);
     #endif
   #endif
@@ -441,20 +438,15 @@ bool batteryRead()
       }
     #endif
     #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32S3_REVTFT
-      if (lipoBattery.begin())
-      {
-        debugMessage(String("Found MAX1704X at I2C address 0x") + lipoBattery.getChipID(),2);
-        hardwareData.batteryPercent = lipoBattery.cellPercent();
-        hardwareData.batteryVoltage = lipoBattery.cellVoltage();
-        // documentation called for a second read to handle error condition?
-        //delay(2000);
-        // hardwareData.batteryPercent = lipoBattery.cellPercent();
-        // hardwareData.batteryVoltage = lipoBattery.cellVoltage();
-        debugMessage(String("Battery voltage: ") + hardwareData.batteryVoltage + "v, percent: " + hardwareData.batteryPercent + "%",1);
-        return true;
-      } 
-      else
+      float voltage = lipoBattery.cellVoltage();
+      if (isnan(voltage)) {
+        debugMessage("Failed to read cell voltage, check if battery is connected",1);
         return false;
+      }
+      hardwareData.batteryVoltage = voltage;
+      hardwareData.batteryPercent = lipoBattery.cellPercent();
+      debugMessage(String("Battery voltage: ") + hardwareData.batteryVoltage + "v, percent: " + hardwareData.batteryPercent + "%",1);
+      return true;
     #endif
   #endif
 }
@@ -485,8 +477,6 @@ void screenHelperBatteryStatus(uint16_t initialX, uint16_t initialY, uint8_t bar
     display.fillRect((initialX + 2), (initialY + 2), int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))), (barHeight - 4), ST77XX_WHITE);
     debugMessage(String("Battery percent displayed is ") + hardwareData.batteryPercent + "%, " + int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))) + " of " + (barWidth-4) + " pixels",1);
   }
-  else
-    debugMessage("No battery for screenHelperBatteryStatus to render",1);
 }
 
 bool sensorCO2Init()
@@ -496,33 +486,113 @@ bool sensorCO2Init()
     return true;
  #else
     char errorMessage[256];
+    uint16_t error;
 
-    // properly initialize boards with two I2C ports
-    #if defined(ARDUINO_ADAFRUIT_QTPY_ESP32S2) || defined(ARDUINO_ADAFRUIT_QTPY_ESP32S3_NOPSRAM) || defined(ARDUINO_ADAFRUIT_QTPY_ESP32S3) || defined(ARDUINO_ADAFRUIT_QTPY_ESP32_PICO)
-      Wire1.begin();
-      envSensor.begin(Wire1);
-    #else
-      // only one I2C port
-      Wire.begin();
-      envSensor.begin(Wire);
-    #endif
+    Wire.begin();
+    envSensor.begin(Wire);
 
-    envSensor.wakeUp();
-    envSensor.setSensorAltitude(SITE_ALTITUDE);  // optimizes CO2 reading
-
-    uint16_t error = envSensor.startPeriodicMeasurement();
+    // stop potentially previously started measurement.
+    error = envSensor.stopPeriodicMeasurement();
     if (error) {
-      // Failed to initialize SCD40
       errorToString(error, errorMessage, 256);
-      debugMessage(String(errorMessage) + " executing SCD40 startPeriodicMeasurement()",1);
+      debugMessage(String(errorMessage) + " executing SCD40 stopPeriodicMeasurement()",1);
       return false;
-    } 
+    }
+
+    // Check onboard configuration settings while not in active measurement mode
+    float offset;
+    error = envSensor.getTemperatureOffset(offset);
+    if (error == 0){
+        error = envSensor.setTemperatureOffset(sensorTempCOffset);
+        if (error == 0)
+          debugMessage(String("Initial SCD40 Temperature offset ") + offset + " set to " + sensorTempCOffset,2);
+    }
+
+    uint16_t sensor_altitude;
+    error = envSensor.getSensorAltitude(sensor_altitude);
+    if (error == 0){
+      error = envSensor.setSensorAltitude(SITE_ALTITUDE);  // optimizes CO2 reading
+      if (error == 0)
+        debugMessage(String("Initial SCD40 Altitude ") + sensor_altitude + " set to " + SITE_ALTITUDE,2);
+    }
+
+    // Start Measurement.  For high power mode, with a fixed update interval of 5 seconds
+    // (the typical usage mode), use startPeriodicMeasurement().  For low power mode, with
+    // a longer fixed sample interval of 30 seconds, use startLowPowerPeriodicMeasurement()
+    // uint16_t error = envSensor.startPeriodicMeasurement();
+    error = envSensor.startLowPowerPeriodicMeasurement();
+    if (error) {
+      errorToString(error, errorMessage, 256);
+      debugMessage(String(errorMessage) + " executing SCD40 startLowPowerPeriodicMeasurement()",1);
+      return false;
+    }
     else
     {
-      debugMessage("power on: SCD40",1);
+      debugMessage("power on: SCD40 starting low power periodic measurements",1);
       return true;
     }
   #endif
+}
+
+bool sensorCO2Read()
+// sets global environment values from SCD40 sensor
+{
+  #ifdef SENSOR_SIMULATE
+    sensorCO2Simulate();
+    debugMessage(String("SIMULATED SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",1);
+  #else
+    char errorMessage[256];
+    bool status;
+    uint16_t co2 = 0;
+    float temperature = 0.0f;
+    float humidity = 0.0f;
+    uint16_t error;
+
+    debugMessage("CO2 sensor read initiated",1);
+
+    // Loop attempting to read Measurement
+    status = false;
+    while(!status) {
+      delay(100);
+
+      // Is data ready to be read?
+      bool isDataReady = false;
+      error = envSensor.getDataReadyFlag(isDataReady);
+      if (error) {
+          errorToString(error, errorMessage, 256);
+          debugMessage(String("Error trying to execute getDataReadyFlag(): ") + errorMessage,1);
+          continue; // Back to the top of the loop
+      }
+      if (!isDataReady) {
+          continue; // Back to the top of the loop
+      }
+      debugMessage("CO2 sensor data available",2);
+
+      error = envSensor.readMeasurement(co2, temperature, humidity);
+      if (error) {
+          errorToString(error, errorMessage, 256);
+          debugMessage(String("SCD40 executing readMeasurement(): ") + errorMessage,1);
+          // Implicitly continues back to the top of the loop
+      }
+      else if (co2 < sensorCO2Min || co2 > sensorCO2Max)
+      {
+        debugMessage(String("SCD40 CO2 reading: ") + sensorData.ambientCO2 + " is out of expected range",1);
+        //(sensorData.ambientCO2 < sensorCO2Min) ? sensorData.ambientCO2 = sensorCO2Min : sensorData.ambientCO2 = sensorCO2Max;
+        // Implicitly continues back to the top of the loop
+      }
+      else
+      {
+        // Successfully read valid data
+        sensorData.ambientTemperatureF = (temperature*1.8)+32.0;
+        sensorData.ambientHumidity = humidity;
+        sensorData.ambientCO2 = co2;
+        debugMessage(String("SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",1);
+        // Update global sensor readings
+        status = true;  // We have data, can break out of loop
+      }
+    }
+  #endif
+  return(true);
 }
 
 void sensorCO2Simulate()
@@ -538,45 +608,6 @@ void sensorCO2Simulate()
     // CO2
     sensorData.ambientCO2 = random(sensorCO2Min, sensorCO2Max);
   #endif
-}
-
-bool sensorCO2Read()
-// sets global environment values from SCD40 sensor
-{
-  debugMessage("sensorCO2 read start",2);
-  #ifdef SENSOR_SIMULATE
-    sensorCO2Simulate();
-  #else
-    char errorMessage[256];
-
-    for (uint8_t loop=1; loop<=sensorReadsPerSample; loop++)
-    {
-      // SCD40 datasheet suggests 5 second delay before SCD40 read
-      delay(5000);
-      uint16_t error = envSensor.readMeasurement(sensorData.ambientCO2, sensorData.ambientTemperatureF, sensorData.ambientHumidity);
-      //convert temperature from Celcius to Fahrenheit
-      sensorData.ambientTemperatureF = (sensorData.ambientTemperatureF * 1.8) + 32;
-      // handle SCD40 errors
-      if (error) {
-        errorToString(error, errorMessage, 256);
-        debugMessage(String("SCD40 read error: ") + errorMessage,1);
-        return false;
-      }
-      if (sensorData.ambientCO2<400 || sensorData.ambientCO2>6000)
-      {
-        debugMessage(String("SCD40 CO2 read out of range: ") + sensorData.ambientCO2,1);
-        (sensorData.ambientCO2<400) ? sensorData.ambientCO2 = 400 : sensorData.ambientCO2 = 6000;
-        return false;
-      }
-      debugMessage(String("SCD40 read ") + loop + " of " + sensorReadsPerSample + " : " + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",2);
-    }
-  #endif
-  #ifdef SENSOR_SIMULATE
-      debugMessage(String("SIMULATED SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",1);
-  #else
-      debugMessage(String("SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",1);
-  #endif
-  return true;
 }
 
 void powerDisable(uint8_t deepSleepTime)
