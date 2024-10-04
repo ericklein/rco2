@@ -7,7 +7,7 @@
 
 // Configuration Step 2: Set debug parameters
 // comment out to turn off; 1 = summary, 2 = verbose
-// #define DEBUG 2
+#define DEBUG 2
 
 // Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
@@ -31,18 +31,15 @@ const uint16_t batteryBarWidth = 28;
 const uint16_t batteryBarHeight = 10;
 
 // Battery
-const float batteryVoltageMinAlert = 3.7;
-const float batteryVoltageMaxAlert = 4.2;
+const uint16_t batteryVoltageMin = 370; // in V, will be divided by 100.0f to give floats
+const uint16_t batteryVoltageMax = 420;
 
 // Simulation values
 #ifdef SENSOR_SIMULATE
-  const uint16_t sensorTempMin =      1500; // will be divided by 100.0 to give floats
+  const uint16_t sensorTempMin =      1500; // in C, will be divided by 100.0 to give floats
   const uint16_t sensorTempMax =      2500;
-  const uint16_t sensorHumidityMin =  500; // will be divided by 100.0 to give floats
+  const uint16_t sensorHumidityMin =  500; // in RH%, will be divided by 100.0 to give floats
   const uint16_t sensorHumidityMax =  9500;
-
-  const uint16_t batterySimVoltageMin = 370; // will be divided by 100.0 to give floats
-  const uint16_t batterySimVoltageMax = 420;
 #endif
 
 // CO2 sensor

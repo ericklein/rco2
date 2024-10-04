@@ -66,8 +66,7 @@ void setup()
     Serial.begin(115200);
     // wait for serial port connection
     while (!Serial);
-
-    debugMessage(String("RCO2 start with ") + sensorSampleInterval + " second sample interval",1);
+    debugMessage(String("Starting RCO2 with ") + sensorSampleInterval + " second sample interval",1);
   #endif
 
   // initialize screen first to display hardware error messages
@@ -87,35 +86,15 @@ void setup()
 
   screenAlert("Initializing");
 
+  // initialize battery monitor
   batteryInit();
-
-  // // initialize battery monitor if available
-  // if (batteryInit())
-  // {
-  //   lipoBattery.setAlertVoltages(batteryVoltageMinAlert,batteryVoltageMaxAlert);
-  //   if (lipoBattery.isHibernating())
-  //     lipoBattery.wake(); 
-  //   // Check if battery is supplying enough voltage to drive the SCD40
-  //   if (lipoBattery.isActiveAlert())
-  //   {
-  //     uint8_t status_flags = lipoBattery.getAlertStatus();
-  //     if (status_flags & MAX1704X_ALERTFLAG_VOLTAGE_LOW)
-  //     {
-  //       debugMessage("Battery below required threshold",1);
-  //       screenAlert("Charge device");
-  //       lipoBattery.clearAlertFlag(MAX1704X_ALERTFLAG_VOLTAGE_LOW); // clear the alert
-  //       // stop user operation. If the device is attached to charger, it will get out of this situation
-  //       while(1);
-  //     }
-  //   }   
-  // }
 
   // Initialize environmental sensor
   if (!sensorCO2Init()) {
+    // This error often occurs right after a firmware flash and reset
     debugMessage("Environment sensor failed to initialize",1);
     screenAlert("No CO2 sensor");
-    // This error often occurs right after a firmware flash and reset.
-    // Hardware deep sleep typically resolves it, so quickly cycle the hardware
+    // Hardware deep sleep typically resolves it
     powerDisable(hardwareRebootInterval);
   }
 
@@ -126,6 +105,23 @@ void loop()
 {
   // update current timer value
   unsigned long timeCurrent = millis();
+
+  // Check if battery is supplying enough voltage to drive the SCD40
+  // if (lipoBattery.isActiveAlert())
+  // {
+  //   uint8_t status_flags = lipoBattery.getAlertStatus();
+  //   // temp debug code
+  //   Serial.print(F("ALERT! flags = 0x"));
+  //   Serial.println(status_flags, HEX);
+  //   if (status_flags & MAX1704X_ALERTFLAG_VOLTAGE_LOW)
+  //   {
+  //     debugMessage("Battery below required threshold",1);
+  //     screenAlert("Plz charge");
+  //     lipoBattery.clearAlertFlag(MAX1704X_ALERTFLAG_VOLTAGE_LOW);
+  //     // reboot device. If the device is attached to charger, it will get out of this situation
+  //     powerDisable(hardwareRebootInterval);
+  //   }
+  // } 
 
   buttonOne.loop();
   // check if buttons were pressed
@@ -139,24 +135,9 @@ void loop()
   // is it time to read the sensor?
   if((timeCurrent - timeLastSample) >= (sensorSampleInterval * 1000)) // converting sensorSampleInterval into milliseconds
   {
-    // // Check if battery is supplying enough voltage to drive the SCD40
-    // if (lipoBattery.isActiveAlert())
-    // {
-    //   uint8_t status_flags = lipoBattery.getAlertStatus();
-    //   if (status_flags & MAX1704X_ALERTFLAG_VOLTAGE_LOW)
-    //   {
-    //     debugMessage("Battery below required threshold",1);
-    //     screenAlert("Charge device");
-    //     lipoBattery.clearAlertFlag(MAX1704X_ALERTFLAG_VOLTAGE_LOW); // clear the alert
-    //     // stop user operation. If the device is attached to charger, it will get out of this situation
-    //     while(1);
-    //   }
-    // }
-
     if (!sensorCO2Read())
     {
       screenAlert("CO2 read fail");
-      // powerDisable(hardwareRebootInterval);
     }
     else
     {
@@ -400,10 +381,9 @@ bool batteryInit()
         debugMessage("Failed to initialize MAX17048",1);
         return(false);
       }
-      debugMessage(String("Found MAX1704X at I2C address 0x") + lipoBattery.getChipID(),1);
-      if (lipoBattery.isHibernating()) lipoBattery.wake();
-      lipoBattery.setAlertVoltages(batteryVoltageMinAlert,batteryVoltageMaxAlert);
-      debugMessage(String("Low voltage alert set to ") + batteryVoltageMinAlert + " v",1);
+      debugMessage(String("MAX1704X battery monitor at I2C address 0x") + lipoBattery.getChipID(),2);
+      lipoBattery.setAlertVoltages((batteryVoltageMin/100.0),(batteryVoltageMax/100.0));
+      debugMessage(String("Low voltage alert set to ") + (batteryVoltageMin/100.0) + "v",1);
       return(true);
     #endif
   #endif
@@ -423,17 +403,18 @@ bool batteryRead()
       measuredvbat *= 2;    // we divided by 2, so multiply back
       measuredvbat /= 1000; // convert to volts!
 
-      // Estimate battery level by interpolating from known threshold voltages
-      hardwareData.batteryPercent = 100.0*(measuredvbat - batteryVoltageMinAlert)/(batteryVoltageMaxAlert - batteryVoltageMinAlert);
-      hardwareData.batteryVoltage = measuredvbat;
-      if (hardwareData.batteryVoltage>=batteryVoltageMinAlert)
+      if ((measuredvbat*100.0)>=batteryVoltageMin)
       {
-        debugMessage(String("Battery voltage: ") + hardwareData.batteryVoltage + "v, percent: " + hardwareData.batteryPercent + "%",1);
+        // Estimate battery level by interpolating from known threshold voltages
+        hardwareData.batteryVoltage = measuredvbat;
+        // Improvement: Could just bit shift measuredvbat below?
+        hardwareData.batteryPercent = (((measuredvbat*100.0) - batteryVoltageMin)/(batteryVoltageMax - batteryVoltageMin)/100.0);
+        debugMessage(String("Battery voltage from pin read: ") + hardwareData.batteryVoltage + "v, percent: " + hardwareData.batteryPercent + "%",1);
         return true;
       }
       else
       {
-        debugMessage("No battery?",1);
+        debugMessage("Low cell voltage, check if battery is connected",1);
         return false;
       }
     #endif
@@ -445,7 +426,7 @@ bool batteryRead()
       }
       hardwareData.batteryVoltage = voltage;
       hardwareData.batteryPercent = lipoBattery.cellPercent();
-      debugMessage(String("Battery voltage: ") + hardwareData.batteryVoltage + "v, percent: " + hardwareData.batteryPercent + "%",1);
+      debugMessage(String("Battery voltage from MAX17048: ") + hardwareData.batteryVoltage + "v, " + hardwareData.batteryPercent + "%",1);
       return true;
     #endif
   #endif
@@ -456,8 +437,8 @@ void batterySimulate()
 {
   // IMPROVEMENT: Simulate battery below SCD40 required level
   #ifdef SENSOR_SIMULATE
-    hardwareData.batteryVoltage = random(batterySimVoltageMin, batterySimVoltageMax) / 100.00;
-    hardwareData.batteryPercent = batteryGetChargeLevel(hardwareData.batteryVoltage);
+    hardwareData.batteryVoltage = random(batteryVoltageMin, batteryVoltageMax) / 100.00;
+    hardwareData.batteryPercent = (((hardwareData.batteryVoltage*100.0) - batteryVoltageMin)/(batteryVoltageMax - batteryVoltageMin)/100.0);
   #endif
 }
 
@@ -505,7 +486,7 @@ bool sensorCO2Init()
     if (error == 0){
         error = envSensor.setTemperatureOffset(sensorTempCOffset);
         if (error == 0)
-          debugMessage(String("Initial SCD40 Temperature offset ") + offset + " set to " + sensorTempCOffset,2);
+          debugMessage(String("Initial SCD40 temperature offset ") + offset + " ,set to " + sensorTempCOffset,2);
     }
 
     uint16_t sensor_altitude;
@@ -513,7 +494,7 @@ bool sensorCO2Init()
     if (error == 0){
       error = envSensor.setSensorAltitude(SITE_ALTITUDE);  // optimizes CO2 reading
       if (error == 0)
-        debugMessage(String("Initial SCD40 Altitude ") + sensor_altitude + " set to " + SITE_ALTITUDE,2);
+        debugMessage(String("Initial SCD40 altitude ") + sensor_altitude + " meters, set to " + SITE_ALTITUDE,2);
     }
 
     // Start Measurement.  For high power mode, with a fixed update interval of 5 seconds
@@ -528,7 +509,7 @@ bool sensorCO2Init()
     }
     else
     {
-      debugMessage("power on: SCD40 starting low power periodic measurements",1);
+      debugMessage("SCD40 starting low power periodic measurements",1);
       return true;
     }
   #endif
@@ -614,20 +595,6 @@ void powerDisable(uint8_t deepSleepTime)
 // turns off component hardware then puts ESP32 into deep sleep mode for specified seconds
 {
   debugMessage("powerDisable start",1);
-  
-  // power down TFT screen
-  // turn off backlite
-  digitalWrite(TFT_BACKLITE, LOW);
-
-  // turn off the TFT / I2C power supply
-  digitalWrite(TFT_I2C_POWER, LOW);
-  delay(10);
-
-  //networkDisconnect();
-
-  // power down MAX1704
-  lipoBattery.hibernate();
-  debugMessage("power off: MAX1704X",2);
 
   // power down SCD40 by stopping potentially started measurement then power down SCD40
   #ifndef HARDWARE_SIMULATE
@@ -641,6 +608,23 @@ void powerDisable(uint8_t deepSleepTime)
     debugMessage("power off: SCD40",2);
   #endif
 
+    // power down MAX1704
+    // Q: is this needed if I already powered down i2c?
+    // lipoBattery.hibernate();
+    // debugMessage("power off: MAX1704X",2);
+  
+  //Q: do these two screen related calls work on ESP32v2?
+  // power down TFT screen
+  // turn off backlite
+  digitalWrite(TFT_BACKLITE, LOW);
+
+  // turn off the TFT / I2C power supply
+  digitalWrite(TFT_I2C_POWER, LOW);
+  delay(10);
+
+  //networkDisconnect();
+
+  // hardware specific powerdown routines
   #if defined(ARDUINO_ADAFRUIT_FEATHER_ESP32_V2)
     // Turn off the I2C power
     pinMode(NEOPIXEL_I2C_POWER, OUTPUT);
