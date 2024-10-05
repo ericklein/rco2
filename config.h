@@ -49,15 +49,25 @@ const uint16_t batteryVoltageMax = 420;
 #else
   const uint16_t sensorSampleInterval = 60;
 #endif
-const String co2Labels[5]={"Good", "OK", "So-So", "Poor", "Bad"};
+
+// Define CO2 values that constitute Red (Alarm) & Yellow (Warning) values
+// US NIOSH (1987) recommendations:
+// 250-350 ppm - normal outdoor ambient concentrations
+// 600 ppm - minimal air quality complaints
+// 600-1,000 ppm - less clearly interpreted
+// 1,000 ppm - indicates inadequate ventilation; complaints such as headaches, fatigue, and eye and throat irritation will be more widespread; 1,000 ppm should be used as an upper limit for indoor levels
+
+const uint16_t co2Warning = 800; // Associated with "OK"
+const uint16_t co2Alarm = 1000; // Associated with "Poor"
+
+const String co2Labels[3]={"Good", "So-So", "Poor"};
 // Subjective color scheme using 16 bit ('565') RGB colors a la ST77XX display
-const uint16_t co2Highlight[5] = {
+const uint16_t co2Color[3] = {
     0x07E0,   // GREEN = "Good"
-    0x07E0,   // GREEN = "OK"
     0xFFE0,   // YELLOW = "So-So"
-    0xFC00,   // ORANGE = "Poor"
-    0xF800    // RED = "Bad"
+    0xF800    // RED = "Poor"
   };
+
 const uint16_t sensorCO2Min =      400;
 const uint16_t sensorCO2Max =      2000;
 const uint16_t sensorTempCOffset = 0; // in C

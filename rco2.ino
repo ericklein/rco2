@@ -220,10 +220,10 @@ void screenCurrentData()
 
   // screenCurrentData layout assist
   // uint16_t for portability to larger screens
-  const uint16_t yCO2 = 35;
-  const uint16_t yTempHumidity = 75;
-  const uint16_t yIcon = 50;
-  const uint16_t xHumidity = 155;
+  const uint16_t yCO2 = 40;
+  const uint16_t yTempHumidity = 80;
+  const uint16_t yIcon = 55;
+  const uint16_t xHumidity = 150;
   const uint16_t xIconStep = 50;
   
  // Clear the screen
@@ -235,11 +235,10 @@ void screenCurrentData()
   display.setTextSize(1);
   display.setCursor(xMargins,yCO2);
   display.print(String("CO2: "));
-  uint8_t co2range = ((sensorData.ambientCO2 - 400) / 400);
-  co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
-  display.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
+  display.setTextColor(co2Color[co2Range(sensorData.ambientCO2)]);  // Use highlight color look-up table
   display.println(sensorData.ambientCO2,0);
-  
+  display.setTextColor(ST77XX_WHITE);
+
   // Display temperature with symbol from custom glyphs
   display.setFont(&FreeSans18pt7b);
   display.setCursor(xMargins,yTempHumidity);
@@ -247,7 +246,7 @@ void screenCurrentData()
   display.drawBitmap(xMargins + xIconStep,yIcon,epd_bitmap_temperatureF_icon_sm,20,28,0xFFFF);
   
   // Display humidity with symbol from custom glyphs
-  display.setCursor(150,yTempHumidity);
+  display.setCursor(xHumidity,yTempHumidity);
   display.print(sensorData.ambientHumidity,0); 
   display.drawBitmap(xHumidity + xIconStep,yIcon,epd_bitmap_humidity_icon_sm4,20,28,0xFFFF);
 
@@ -261,90 +260,88 @@ void screenColor()
 // Represents CO2 value on screen as a single color fill
 {
   debugMessage("screenColor start",1);
-  uint8_t co2range = ((sensorData.ambientCO2 - 400) / 400);
-  co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
-  display.fillScreen(co2Highlight[co2range]);  // Use highlight color look-up table
+  display.fillScreen(co2Color[co2Range(sensorData.ambientCO2)]);  // Use highlight color LUT
   debugMessage("screenColor end",1);
 }
 
 void screenSaver()
+// Display current CO2 reading at a random location (e.g. "screen saver")
 {
   int16_t x, y;
 
   debugMessage("screenSaver start",1);
-  // Display current CO2 reading at a random location ("screen saver")
   display.fillScreen(ST77XX_BLACK);
   display.setTextSize(1);  // Needed so custom fonts scale properly
   display.setFont(&FreeSans18pt7b);
 
   // Pick a random location that'll show up
-  x = random(xMargins,240-xMargins-64);  // Guessing 64 is room for 4 digit CO2 value
-  y = random(35,135-yMargins);
+  x = random(xMargins,display.width()-xMargins-64);  // 64 pixels leaves room for 4 digit CO2 value
+  y = random(35,display.height()-yMargins); // 35 pixels leaves vertical room for text display
   display.setCursor(x,y);
-
-  uint8_t co2range = ((sensorData.ambientCO2 - 400) / 400);
-  co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
-  display.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
+  display.setTextColor(co2Color[co2Range(sensorData.ambientCO2)]);  // Use highlight color LUT
   display.println(sensorData.ambientCO2);
-  display.setTextColor(ST77XX_WHITE);
   debugMessage("screenSaver end",1);
 }
 
+void screenAggregateData()
 // Displays minimum, average, and maximum values for CO2, temperature and humidity
 // using a table-style layout (with labels)
-void screenAggregateData()
-{  
-  uint8_t co2range;
+{
 
-  // Clear screen and display row/column labels
+  const uint16_t xHeaderColumn = 10;
+  const uint16_t xCO2Column = 70;
+  const uint16_t xTempColumn = 130;
+  const uint16_t xHumidityColumn = 200;
+  const uint16_t yHeaderRow = 10;
+  const uint16_t yMaxRow = 40;
+  const uint16_t yAvgRow = 70;
+  const uint16_t yMinRow = 100;
+
+  // clear screen
   display.fillScreen(ST77XX_BLACK);
+
+  // display headers
   display.setFont();  // Revert to built-in font
   display.setTextSize(2);
-
-  display.setCursor( 70, 10); display.print("CO2");
-  display.setCursor(130, 10); display.print("  F");
-  display.setCursor(200, 10); display.print("RH");
-
-  display.setCursor( 10, 40); display.print("Max");
-  display.setCursor( 10, 70); display.print("Avg");
-  display.setCursor( 10,100); display.print("Min");
+  display.setTextColor(ST77XX_WHITE);
+  // column
+  display.setCursor(xCO2Column, yHeaderRow); display.print("CO2");
+  display.setCursor(xTempColumn, yHeaderRow); display.print("  F");
+  display.setCursor(xHumidityColumn, yHeaderRow); display.print("RH");
+  // row
+  display.setCursor(xHeaderColumn, yMaxRow); display.print("Max");
+  display.setCursor(xHeaderColumn, yAvgRow); display.print("Avg");
+  display.setCursor(xHeaderColumn, yMinRow); display.print("Min");
 
   // Fill in the maximum values row
-  display.setCursor( 70, 40);
-  co2range = ((totalCO2.getMax() - 400) / 400);
-  co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
-  display.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
+  display.setCursor(xCO2Column, yMaxRow);
+  display.setTextColor(co2Color[co2Range(totalCO2.getMax())]);  // Use highlight color look-up table
   display.print(totalCO2.getMax(),0);
   display.setTextColor(ST77XX_WHITE);
   
-  display.setCursor(130, 40); display.print(totalTemperatureF.getMax(),1);
-  display.setCursor(200, 40); display.print(totalHumidity.getMax(),0);
+  display.setCursor(xTempColumn, yMaxRow); display.print(totalTemperatureF.getMax(),1);
+  display.setCursor(xHumidityColumn, yMaxRow); display.print(totalHumidity.getMax(),0);
 
   // Fill in the average value row
-  display.setCursor( 70, 70);
-  co2range = ((totalCO2.getAverage() - 400) / 400);
-  co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
-  display.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
+  display.setCursor(xCO2Column, yAvgRow);
+  display.setTextColor(co2Color[co2Range(totalCO2.getAverage())]);  // Use highlight color look-up table
   display.print(totalCO2.getAverage(),0);
   display.setTextColor(ST77XX_WHITE);
 
-  display.setCursor(130, 70); display.print(totalTemperatureF.getAverage(),1);
-  display.setCursor(200, 70); display.print(totalHumidity.getAverage(),0);
+  display.setCursor(xTempColumn, yAvgRow); display.print(totalTemperatureF.getAverage(),1);
+  display.setCursor(xHumidityColumn, yAvgRow); display.print(totalHumidity.getAverage(),0);
 
   // Fill in the minimum value row
-  display.setCursor( 70,100);   
-  co2range = ((totalCO2.getMin() - 400) / 400);
-  co2range = constrain(co2range,0,4); // filter CO2 levels above 2400
-  display.setTextColor(co2Highlight[co2range]);  // Use highlight color look-up table
+  display.setCursor(xCO2Column,yMinRow);
+  display.setTextColor(co2Color[co2Range(totalCO2.getMin())]);  // Use highlight color look-up table
   display.print(totalCO2.getMin(),0);
   display.setTextColor(ST77XX_WHITE);
 
-  display.setCursor(130,100); display.print(totalTemperatureF.getMin(),1);
-  display.setCursor(200,100); display.print(totalHumidity.getMin(),0);
-
+  display.setCursor(xTempColumn,yMinRow); display.print(totalTemperatureF.getMin(),1);
+  display.setCursor(xHumidityColumn,yMinRow); display.print(totalHumidity.getMin(),0);
 
   // Display current battery level on bottom right of screen
-  screenHelperBatteryStatus((display.width()-xMargins-batteryBarWidth-3),(display.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
+  //screenHelperBatteryStatus((display.width()-xMargins-batteryBarWidth-3),(display.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
 }
 
 void screenGraph()
@@ -589,6 +586,17 @@ void sensorCO2Simulate()
     // CO2
     sensorData.ambientCO2 = random(sensorCO2Min, sensorCO2Max);
   #endif
+}
+
+uint8_t co2Range(uint16_t value)
+// places CO2 value into a three band range for labeling and coloring. See config.h for more information
+{
+  if (value < co2Warning)
+    return 0;
+  else if (value < co2Alarm)
+    return 1;
+  else
+    return 2;
 }
 
 void powerDisable(uint8_t deepSleepTime)
