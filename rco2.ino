@@ -7,7 +7,7 @@
 
 // hardware and internet configuration parameters
 #include "config.h"
-// private credentials for network, MQTT
+// private credentials
 #include "secrets.h"
 
 // Utility class for easy handling aggregate sensor datta
@@ -67,6 +67,12 @@ void setup()
     // wait for serial port connection
     while (!Serial);
     debugMessage(String("Starting RCO2 with ") + sensorSampleInterval + " second sample interval",1);
+  #endif
+
+  #ifdef HARDWARE_SIMULATE
+    // generate random numbers for every boot cycle
+    // used by HARDWARE_SIUMLATE
+    randomSeed(analogRead(0));
   #endif
 
   // initialize screen first to display hardware error messages
