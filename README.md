@@ -1,5 +1,6 @@
 # RCO2
-AI: PUT HERO SHOT HERE
+![hero shot](readme/carrier_board_front.jpg)
+![hero shot back](readme/carrier_board_back.jpg)
 
 ## Purpose
 Realtime CO2, aka rco2, samples and displays temperature, humidity, and CO2 (carbon dioxide) levels.

@@ -7,7 +7,7 @@
 
 // Configuration Step 2: Set debug parameters
 // comment out to turn off; 1 = summary, 2 = verbose
-#define DEBUG 2
+// #define DEBUG 2
 
 // Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
@@ -21,7 +21,7 @@ const uint8_t buttonD1Pin = 1; // initially LOW
 const int buttonDebounceDelay = 50; // time in milliseconds to debounce button
 
 // Display
-const uint8_t screenRotation = 3; // rotation 3 orients 0,0 next to D0 button
+const uint8_t screenRotation = 1; // rotation 3 orients 0,0 next to D0 button
 const uint8_t screenCount = 5;
 
 // screen layout assists
