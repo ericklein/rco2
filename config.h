@@ -7,7 +7,7 @@
 
 // Configuration Step 2: Set debug parameters
 // comment out to turn off; 1 = summary, 2 = verbose
-#define DEBUG 2
+// #define DEBUG 2
 
 // Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
@@ -17,50 +17,59 @@
 
 // Buttons
 const uint8_t buttonD1Pin = 1; // initially LOW
-const uint8_t buttonD2Pin = 2; // initially LOW
-
-const int buttonDebounceDelay = 50; // time in milliseconds to debounce button
+const uint16_t buttonDebounceDelay = 50; // time in milliseconds to debounce button
 
 // Display
-const uint8_t displayRotation = 3; // rotation 3 orients 0,0 next to D0 button
+const uint8_t screenRotation = 1; // rotation 3 orients 0,0 next to D0 button
+const uint8_t screenCount = 5;
+
+// screen layout assists
+const uint16_t xMargins = 5;
+const uint16_t yMargins = 2;
+const uint16_t batteryBarWidth = 28;
+const uint16_t batteryBarHeight = 10;
 
 // Battery
-const float batteryVoltageMinAlert = 3.7;
-const float batteryVoltageMaxAlert = 4.2;
+const uint16_t batteryVoltageMin = 370; // in V, will be divided by 100.0f to give floats
+const uint16_t batteryVoltageMax = 420;
 
 // Simulation values
 #ifdef SENSOR_SIMULATE
-  const uint16_t sensorTempMin =      1500; // will be divided by 100.0 to give floats
+  const uint16_t sensorTempMin =      1500; // in C, will be divided by 100.0 to give floats
   const uint16_t sensorTempMax =      2500;
-  const uint16_t sensorHumidityMin =  500; // will be divided by 100.0 to give floats
+  const uint16_t sensorHumidityMin =  500; // in RH%, will be divided by 100.0 to give floats
   const uint16_t sensorHumidityMax =  9500;
-  const uint16_t sensorCO2Min =       400;
-  const uint16_t sensorCO2Max =       3000;
-
-  const uint16_t batterySimVoltageMin = 370; // will be divided by 100.0 to give floats
-  const uint16_t batterySimVoltageMax = 420;
 #endif
 
 // CO2 sensor
-//sample timing
 #ifdef DEBUG
-	// number of times SCD40 is read, last read is the sample value
-	const uint8_t sensorReadsPerSample =	1;
 	// time between samples in seconds
-  const uint16_t sensorSampleInterval = 60;
+  const uint16_t sensorSampleInterval = 30;
 #else
-  const uint8_t sensorReadsPerSample =  3;
-  const uint16_t sensorSampleInterval = 120;
+  const uint16_t sensorSampleInterval = 60;
 #endif
-const String co2Labels[5]={"Good", "OK", "So-So", "Poor", "Bad"};
+
+// Define CO2 values that constitute Red (Alarm) & Yellow (Warning) values
+// US NIOSH (1987) recommendations:
+// 250-350 ppm - normal outdoor ambient concentrations
+// 600 ppm - minimal air quality complaints
+// 600-1,000 ppm - less clearly interpreted
+// 1,000 ppm - indicates inadequate ventilation; complaints such as headaches, fatigue, and eye and throat irritation will be more widespread; 1,000 ppm should be used as an upper limit for indoor levels
+
+const uint16_t co2Warning = 800; // Associated with "OK"
+const uint16_t co2Alarm = 1000; // Associated with "Poor"
+
+const String co2Labels[3]={"Good", "So-So", "Poor"};
 // Subjective color scheme using 16 bit ('565') RGB colors a la ST77XX display
-const uint16_t co2Highlight[5] = {
+const uint16_t co2Color[3] = {
     0x07E0,   // GREEN = "Good"
-    0x07E0,   // GREEN = "OK"
     0xFFE0,   // YELLOW = "So-So"
-    0xFC00,   // ORANGE = "Poor"
-    0xF800    // RED = "Bad"
+    0xF800    // RED = "Poor"
   };
+
+const uint16_t sensorCO2Min =      400;
+const uint16_t sensorCO2Max =      2000;
+const uint16_t sensorTempCOffset = 0; // in C
 
 // Hardware
 // Sleep time in seconds if hardware error occurs
