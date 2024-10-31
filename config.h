@@ -17,8 +17,7 @@
 
 // Buttons
 const uint8_t buttonD1Pin = 1; // initially LOW
-
-const int buttonDebounceDelay = 50; // time in milliseconds to debounce button
+const uint16_t buttonDebounceDelay = 50; // time in milliseconds to debounce button
 
 // Display
 const uint8_t screenRotation = 1; // rotation 3 orients 0,0 next to D0 button

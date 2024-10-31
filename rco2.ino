@@ -10,7 +10,7 @@
 // private credentials
 #include "secrets.h"
 
-// Utility class for easy handling aggregate sensor datta
+// Utility class for easy handling aggregate sensor data
 #include "measure.h"
 
 // screen support (ST7789 240x135 pixels color TFT)
@@ -76,14 +76,15 @@ void setup()
   #endif
 
   // initialize screen first to display hardware error messages
-  // turn on backlite
-  pinMode(TFT_BACKLITE, OUTPUT);
-  digitalWrite(TFT_BACKLITE, HIGH);
 
   // turn on the TFT / I2C power supply
   pinMode(TFT_I2C_POWER, OUTPUT);
   digitalWrite(TFT_I2C_POWER, HIGH);
   delay(10);
+
+  // turn on backlite
+  pinMode(TFT_BACKLITE, OUTPUT);
+  digitalWrite(TFT_BACKLITE, HIGH);
 
   // initialize TFT screen
   display.init(135, 240); // Init ST7789 240x135
