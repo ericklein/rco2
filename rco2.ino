@@ -13,6 +13,17 @@
 // Utility class for easy handling aggregate sensor data
 #include "measure.h"
 
+#ifndef HARDWARE_SIMULATE
+  // sensor support
+  // instanstiate scd40 hardware object
+  #include <SensirionI2CScd4x.h>
+  SensirionI2CScd4x envSensor;
+
+  // ESP32S3 REV TFT has an onboard MAX17048 battery monitor
+  #include "Adafruit_MAX1704X.h"
+  Adafruit_MAX17048 lipoBattery;
+#endif
+
 // screen support (ST7789 240x135 pixels color TFT)
 #include <Adafruit_ST7789.h>
 Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
@@ -20,16 +31,6 @@ Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 #include <Fonts/FreeSans24pt7b.h>
 // Special glyphs for the UI
 #include "Fonts/glyphs.h"
-
-// sensor support
-#ifndef SENSOR_SIMULATE
-  // initialize scd40 CO2 sensor
-  #include <SensirionI2CScd4x.h>
-  SensirionI2CScd4x envSensor;
-  // ESP32S3 REV TFT has an onboard MAX17048 battery monitor
-  #include "Adafruit_MAX1704X.h"
-  Adafruit_MAX17048 lipoBattery;
-#endif
 
 // button support
 #include <ezButton.h>
@@ -39,9 +40,10 @@ ezButton buttonOne(buttonD1Pin,INPUT_PULLDOWN);
 
 // environment sensor data
 typedef struct {
+  // SCD40 data
   float     ambientTemperatureF;
-  float     ambientHumidity;     // RH [%]  
-  uint16_t  ambientCO2;
+  float     ambientHumidity;      // RH [%]  
+  uint16_t  ambientCO2;           // ppm
 } envData;
 envData sensorData;
 
@@ -158,18 +160,6 @@ void loop()
     // Save current timestamp to restart sample delay interval
     timeLastSample = timeCurrent;
   }
-}
-
-void debugMessage(String messageText, int messageLevel)
-// wraps Serial.println as #define conditional
-{
-  #ifdef DEBUG
-    if (messageLevel <= DEBUG)
-    {
-      Serial.println(messageText);
-      Serial.flush();  // Make sure the message gets output (before any sleeping...)
-    }
-  #endif
 }
 
 void screenUpdate(bool firstTime) 
@@ -363,10 +353,55 @@ void screenGraph()
   debugMessage("screenGraph end",1);
 }
 
+void screenHelperBatteryStatus(uint16_t initialX, uint16_t initialY, uint8_t barWidth, uint8_t barHeight)
+// helper function for screenXXX() routines that draws battery charge %
+{
+  // IMPROVEMENT : Screen dimension boundary checks for passed parameters
+  // IMPROVEMENT : Check for offscreen drawing based on passed parameters
+ 
+  if (batteryRead())
+  {
+    // battery nub; width = 3pix, height = 60% of barHeight
+    display.fillRect((initialX+barWidth), (initialY+(int(barHeight/5))), 3, (int(barHeight*3/5)), ST77XX_WHITE);
+    // battery border
+    display.drawRect(initialX, initialY, barWidth, barHeight, ST77XX_WHITE);
+    // MAX1704X often returns cellPercent > 100 even though cellVoltage < batteryVoltageMax, so constrain the value
+    hardwareData.batteryPercent = (hardwareData.batteryPercent > 100.0 ? 100.0 : hardwareData.batteryPercent);
+    //battery percentage as rectangle fill, 1 pixel inset from the battery border
+    display.fillRect((initialX + 2), (initialY + 2), int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))), (barHeight - 4), ST77XX_WHITE);
+    debugMessage(String("Battery percent displayed is ") + hardwareData.batteryPercent + "%, " + int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))) + " of " + (barWidth-4) + " pixels",1);
+  }
+}
+
+// Hardware simulation routines
+#ifdef HARDWARE_SIMULATE
+  void batterySimulate()
+  // sets global battery values from synthetic algorithms
+  {
+    // IMPROVEMENT: Simulate battery below SCD40 required level
+    hardwareData.batteryVoltage = random(batteryVoltageMin, batteryVoltageMax) / 100.00;
+    hardwareData.batteryPercent = ((((hardwareData.batteryVoltage*100.0) - batteryVoltageMin)/(batteryVoltageMax - batteryVoltageMin))*100.0);
+    debugMessage(String("SIMULATED Battery voltage: ") + hardwareData.batteryVoltage + "v, percent: " + hardwareData.batteryPercent + "%",1);
+  }
+
+  void sensorCO2Simulate()
+  // Simulate ranged data from the SCD40
+  // Improvement - implement stable, rapid rise and fall 
+  {
+    // Temperature in Fahrenheit
+    sensorData.ambientTemperatureF = ((random(sensorTempMin,sensorTempMax) / 100.0)*1.8)+32.0;
+    // Humidity
+    sensorData.ambientHumidity = random(sensorHumidityMin,sensorHumidityMax) / 100.0;
+    // CO2
+    sensorData.ambientCO2 = random(sensorCO2Min, sensorCO2Max);
+    debugMessage(String("SIMULATED SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",1);
+  }
+#endif
+
 // Initialize whatever battery monitoring sensor/controller is available
 bool batteryInit()
 {
-  #ifdef SENSOR_SIMULATE
+  #ifdef HARDWARE_SIMULATE
     return(true);  // Simulating, nothing to be done
   #else
     // Feather ESP32 V2 battery monitoring
@@ -396,9 +431,8 @@ bool batteryInit()
 bool batteryRead()
 // sets global battery values from i2c battery monitor or analog pin value on supported boards
 {
-  #ifdef SENSOR_SIMULATE
+  #ifdef HARDWARE_SIMULATE
     batterySimulate();
-    debugMessage(String("SIMULATED Battery voltage: ") + hardwareData.batteryVoltage + "v, percent: " + hardwareData.batteryPercent + "%",1);
     return true;
   #else
     // Feather ESP32 V2 with simple voltage divider battery monitor
@@ -436,38 +470,10 @@ bool batteryRead()
   #endif
 }
 
-void batterySimulate()
-// sets global battery values from synthetic algorithms
-{
-  // IMPROVEMENT: Simulate battery below SCD40 required level
-  #ifdef SENSOR_SIMULATE
-    hardwareData.batteryVoltage = random(batteryVoltageMin, batteryVoltageMax) / 100.00;
-    hardwareData.batteryPercent = (((hardwareData.batteryVoltage*100.0) - batteryVoltageMin)/(batteryVoltageMax - batteryVoltageMin)/100.0);
-  #endif
-}
-
-void screenHelperBatteryStatus(uint16_t initialX, uint16_t initialY, uint8_t barWidth, uint8_t barHeight)
-// helper function for screenXXX() routines that draws battery charge %
-{
-  // IMPROVEMENT : Screen dimension boundary checks for passed parameters
-  // IMPROVEMENT : Check for offscreen drawing based on passed parameters
- 
-  if (batteryRead())
-  {
-    // battery nub; width = 3pix, height = 60% of barHeight
-    display.fillRect((initialX+barWidth), (initialY+(int(barHeight/5))), 3, (int(barHeight*3/5)), ST77XX_WHITE);
-    // battery border
-    display.drawRect(initialX, initialY, barWidth, barHeight, ST77XX_WHITE);
-    //battery percentage as rectangle fill, 1 pixel inset from the battery border
-    display.fillRect((initialX + 2), (initialY + 2), int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))), (barHeight - 4), ST77XX_WHITE);
-    debugMessage(String("Battery percent displayed is ") + hardwareData.batteryPercent + "%, " + int(0.5+(hardwareData.batteryPercent*((barWidth-4)/100.0))) + " of " + (barWidth-4) + " pixels",1);
-  }
-}
-
 bool sensorCO2Init()
 // initializes CO2 sensor to read
 {
-  #ifdef SENSOR_SIMULATE
+  #ifdef HARDWARE_SIMULATE
     return true;
  #else
     char errorMessage[256];
@@ -522,9 +528,9 @@ bool sensorCO2Init()
 bool sensorCO2Read()
 // sets global environment values from SCD40 sensor
 {
-  #ifdef SENSOR_SIMULATE
+  #ifdef HARDWARE_SIMULATE
     sensorCO2Simulate();
-    debugMessage(String("SIMULATED SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",1);
+    return true;
   #else
     char errorMessage[256];
     bool status;
@@ -580,21 +586,6 @@ bool sensorCO2Read()
   return(true);
 }
 
-void sensorCO2Simulate()
-// sets global environment values from synthetic algorithms
-{
-  // Improvement - implement stable, rapid rise and fall
-  #ifdef SENSOR_SIMULATE
-    // Temperature
-    // keep this value in C, as it is converted to F in sensorCO2Read
-    sensorData.ambientTemperatureF = random(sensorTempMin,sensorTempMax) / 100.0;
-    // Humidity
-    sensorData.ambientHumidity = random(sensorHumidityMin,sensorHumidityMax) / 100.0;
-    // CO2
-    sensorData.ambientCO2 = random(sensorCO2Min, sensorCO2Max);
-  #endif
-}
-
 uint8_t co2Range(uint16_t value)
 // places CO2 value into a three band range for labeling and coloring. See config.h for more information
 {
@@ -635,9 +626,6 @@ void powerDisable(uint8_t deepSleepTime)
 
   // turn off the TFT / I2C power supply
   digitalWrite(TFT_I2C_POWER, LOW);
-  delay(10);
-
-  //networkDisconnect();
 
   // hardware specific powerdown routines
   #if defined(ARDUINO_ADAFRUIT_FEATHER_ESP32_V2)
@@ -647,14 +635,19 @@ void powerDisable(uint8_t deepSleepTime)
     debugMessage("power off: ESP32V2 I2C",2);
   #endif
 
-  #if defined(ARDUINO_ADAFRUIT_FEATHER_ESP32S2)
-    // Rev B board is LOW to enable
-    // Rev C board is HIGH to enable
-    digitalWrite(PIN_I2C_POWER, LOW);
-    debugMessage("power off: ESP32S2 I2C",2);
-  #endif
-
   esp_sleep_enable_timer_wakeup(deepSleepTime*1000000); // ESP microsecond modifier
   debugMessage(String("powerDisable complete: ESP32 deep sleep for ") + (deepSleepTime) + " seconds",1);
   esp_deep_sleep_start();
+}
+
+void debugMessage(String messageText, int messageLevel)
+// wraps Serial.println as #define conditional
+{
+  #ifdef DEBUG
+    if (messageLevel <= DEBUG)
+    {
+      Serial.println(messageText);
+      Serial.flush();  // Make sure the message gets output (before any sleeping...)
+    }
+  #endif
 }
