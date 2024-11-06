@@ -11,7 +11,7 @@
 
 // Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
-// #define SENSOR_SIMULATE
+// #define HARDWARE_SIMULATE
 
 // Configuration variables that change rarely
 
@@ -23,7 +23,7 @@ const uint16_t buttonDebounceDelay = 50; // time in milliseconds to debounce but
 const uint8_t screenRotation = 1; // rotation 3 orients 0,0 next to D0 button
 const uint8_t screenCount = 5;
 
-// screen layout assists
+// screen layout assists in pixels
 const uint16_t xMargins = 5;
 const uint16_t yMargins = 2;
 const uint16_t batteryBarWidth = 28;
@@ -33,11 +33,11 @@ const uint16_t batteryBarHeight = 10;
 const uint16_t batteryVoltageMin = 370; // in V, will be divided by 100.0f to give floats
 const uint16_t batteryVoltageMax = 420;
 
-// Simulation values
-#ifdef SENSOR_SIMULATE
-  const uint16_t sensorTempMin =      1500; // in C, will be divided by 100.0 to give floats
+// Simulation boundary values
+#ifdef HARDWARE_SIMULATE
+  const uint16_t sensorTempMin =      1500; // in Celcius, divided by 100.0 to give floats
   const uint16_t sensorTempMax =      2500;
-  const uint16_t sensorHumidityMin =  500; // in RH%, will be divided by 100.0 to give floats
+  const uint16_t sensorHumidityMin =  500; // in RH%, divided by 100.0 to give floats
   const uint16_t sensorHumidityMax =  9500;
 #endif
 
@@ -67,9 +67,9 @@ const uint16_t co2Color[3] = {
     0xF800    // RED = "Poor"
   };
 
-const uint16_t sensorCO2Min =      400;
-const uint16_t sensorCO2Max =      2000;
-const uint16_t sensorTempCOffset = 0; // in C
+const uint16_t sensorCO2Min =      400;   // in ppm
+const uint16_t sensorCO2Max =      2000;  // in ppm
+const uint16_t sensorTempCOffset = 0;     // in Celcius
 
 // Hardware
 // Sleep time in seconds if hardware error occurs
