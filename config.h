@@ -24,6 +24,8 @@ const uint8_t screenRotation = 1; // rotation 3 orients 0,0 next to D0 button
 const uint8_t screenCount = 5;
 
 // screen layout assists in pixels
+const uint16_t screenWidth = 135;
+const uint16_t screenHeight = 240;
 const uint16_t xMargins = 5;
 const uint16_t yMargins = 2;
 const uint16_t batteryBarWidth = 28;
@@ -32,6 +34,8 @@ const uint16_t batteryBarHeight = 10;
 // Battery
 const uint16_t batteryVoltageMin = 370; // in V, will be divided by 100.0f to give floats
 const uint16_t batteryVoltageMax = 420;
+// software battery read (Feather ESP32 V2)
+#define BATTERY_VOLTAGE_PIN A13
 
 // Simulation boundary values
 #ifdef HARDWARE_SIMULATE

@@ -71,25 +71,24 @@ void setup()
     debugMessage(String("Starting RCO2 with ") + sensorSampleInterval + " second sample interval",1);
   #endif
 
-  #ifdef HARDWARE_SIMULATE
-    // generate random numbers for every boot cycle
-    // used by HARDWARE_SIUMLATE
-    randomSeed(analogRead(0));
-  #endif
+  // generate random numbers for every boot cycle
+  randomSeed(analogRead(0));
 
   // initialize screen first to display hardware error messages
-
-  // turn on the TFT / I2C power supply
-  pinMode(TFT_I2C_POWER, OUTPUT);
-  digitalWrite(TFT_I2C_POWER, HIGH);
-  delay(10);
+  #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32S3_REVTFT
+    // turn on the TFT / I2C power supply
+    pinMode(TFT_I2C_POWER, OUTPUT);
+    digitalWrite(TFT_I2C_POWER, HIGH);
+    delay(10);
+    debugMessage("power on: ESP32S3_REVTFT TFT/I2C",2);
+  #endif
 
   // turn on backlite
   pinMode(TFT_BACKLITE, OUTPUT);
   digitalWrite(TFT_BACKLITE, HIGH);
 
   // initialize TFT screen
-  display.init(135, 240); // Init ST7789 240x135
+  display.init(screenWidth, screenHeight);
   display.setRotation(screenRotation);
   display.setTextWrap(false);
 
@@ -426,6 +425,8 @@ bool batteryInit()
       return(true);
     #endif
   #endif
+  // there is no battery monitor available
+  return false;
 }
 
 bool batteryRead()
@@ -437,7 +438,7 @@ bool batteryRead()
   #else
     // Feather ESP32 V2 with simple voltage divider battery monitor
     #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32_V2
-      float measuredvbat = analogReadMilliVolts(VBATPIN);
+      float measuredvbat = analogReadMilliVolts(BATTERY_VOLTAGE_PIN);
       measuredvbat *= 2;    // we divided by 2, so multiply back
       measuredvbat /= 1000; // convert to volts!
 
@@ -468,6 +469,8 @@ bool batteryRead()
       return true;
     #endif
   #endif
+  // unable to read the battery or it might not even be there
+  return false;
 }
 
 bool sensorCO2Init()
@@ -614,25 +617,27 @@ void powerDisable(uint8_t deepSleepTime)
     debugMessage("power off: SCD40",2);
   #endif
 
-    // power down MAX1704
-    // Q: is this needed if I already powered down i2c?
-    // lipoBattery.hibernate();
-    // debugMessage("power off: MAX1704X",2);
+  // power down MAX1704
+  // Q: is this needed if I already powered down i2c?
+  // lipoBattery.hibernate();
+  // debugMessage("power off: MAX1704X",2);
   
   //Q: do these two screen related calls work on ESP32v2?
   // power down TFT screen
   // turn off backlite
   digitalWrite(TFT_BACKLITE, LOW);
 
-  // turn off the TFT / I2C power supply
-  digitalWrite(TFT_I2C_POWER, LOW);
-
   // hardware specific powerdown routines
+  #ifdef ARDUINO_ADAFRUIT_FEATHER_ESP32S3_REVTFT
+    // turn off the TFT / I2C power supply
+    digitalWrite(TFT_I2C_POWER, LOW);
+    debugMessage("power off: ESP32S3_REVTFT TFT/I2C",2);
+  #endif
   #if defined(ARDUINO_ADAFRUIT_FEATHER_ESP32_V2)
     // Turn off the I2C power
     pinMode(NEOPIXEL_I2C_POWER, OUTPUT);
     digitalWrite(NEOPIXEL_I2C_POWER, LOW);
-    debugMessage("power off: ESP32V2 I2C",2);
+    debugMessage("power off: ESP32_V2 I2C",2);
   #endif
 
   esp_sleep_enable_timer_wakeup(deepSleepTime*1000000); // ESP microsecond modifier
