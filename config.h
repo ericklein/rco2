@@ -7,7 +7,7 @@
 
 // Configuration Step 2: Set debug parameters
 // comment out to turn off; 1 = summary, 2 = verbose
-// #define DEBUG 2
+#define DEBUG 2
 
 // Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
@@ -16,16 +16,24 @@
 // Configuration variables that change rarely
 
 // Buttons
-const uint8_t buttonD1Pin = 1; // initially LOW
+const uint8_t buttonD1Pin = 4; // initially LOW
 const uint16_t buttonDebounceDelay = 50; // time in milliseconds to debounce button
 
 // Display
-const uint8_t screenRotation = 1; // rotation 3 orients 0,0 next to D0 button
+
+// Adafruit Funhouse changes
+#define TFT_RST TFT_RESET
+#define TFT_BACKLITE TFT_BACKLIGHT
+const uint16_t screenWidth = 240;
+const uint16_t screenHeight = 240;
+const uint8_t screenRotation = 0; // rotation 3 orients 0,0 next to D0 button
+
+// const uint8_t screenRotation = 1; // rotation 3 orients 0,0 next to D0 button
 const uint8_t screenCount = 5;
 
 // screen layout assists in pixels
-const uint16_t screenWidth = 135;
-const uint16_t screenHeight = 240;
+// const uint16_t screenWidth = 135;
+// const uint16_t screenHeight = 240;
 const uint16_t xMargins = 5;
 const uint16_t yMargins = 2;
 const uint16_t batteryBarWidth = 28;
