@@ -69,7 +69,7 @@ const uint16_t co2Color[3] = {
 
 const uint16_t sensorCO2Min =      400;   // in ppm
 const uint16_t sensorCO2Max =      2000;  // in ppm
-const uint16_t sensorTempCOffset = 0;     // in Celcius
+const uint8_t co2SensorReadFailureLimit = 20;
 
 // Hardware
 // Sleep time in seconds if hardware error occurs

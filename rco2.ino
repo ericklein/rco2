@@ -5,19 +5,14 @@
   See README.md for target information
 */
 
-// hardware and internet configuration parameters
-#include "config.h"
-// private credentials
-#include "secrets.h"
-
-// Utility class for easy handling aggregate sensor data
-#include "measure.h"
+#include "config.h"   // hardware and internet configuration parameters
+#include "secrets.h"  // private credentials
+#include "measure.h"  // Utility class for easy handling aggregate sensor data
 
 #ifndef HARDWARE_SIMULATE
-  // sensor support
   // instanstiate scd40 hardware object
-  #include <SensirionI2CScd4x.h>
-  SensirionI2CScd4x envSensor;
+  #include <SensirionI2cScd4x.h>
+  SensirionI2cScd4x co2Sensor;
 
   // ESP32S3 REV TFT has an onboard MAX17048 battery monitor
   #include "Adafruit_MAX1704X.h"
@@ -102,12 +97,13 @@ void setup()
   if (!sensorCO2Init()) {
     // This error often occurs right after a firmware flash and reset
     debugMessage("Environment sensor failed to initialize",1);
-    screenAlert("No CO2 sensor");
+    screenAlert("No SCD40");
     // Hardware deep sleep typically resolves it
     powerDisable(hardwareRebootInterval);
   }
-
-  buttonOne.setDebounceTime(buttonDebounceDelay); 
+  buttonOne.setDebounceTime(buttonDebounceDelay);
+  // Explicit start-up delay because the SCD40 takes ~7 seconds to return valid CO2 readings.
+  delay(7000);
 }
 
 void loop()
@@ -188,26 +184,86 @@ void screenUpdate(bool firstTime)
   }
 }
 
-void screenAlert(String messageText)
-// Display error message centered on screen
+bool screenAlert(String messageText)
+// Description: Display error message centered on screen, using different font sizes and/or splitting to fit on screen
+// Parameters: String containing error message text
+// Output: NA (void)
+// Improvement: ?
 {
-  debugMessage(String("screenAlert '") + messageText + "' start",1);
-  // Clear the screen
-  display.fillScreen(ST77XX_BLACK);
-
+  bool success = false;
   int16_t x1, y1;
-  uint16_t width, height;
+  uint16_t largeFontPhraseOneWidth, largeFontPhraseOneHeight;
+
+  debugMessage("screenAlert start",1);
 
   display.setTextColor(ST77XX_WHITE);
-  display.setFont(&FreeSans24pt7b);
-  display.getTextBounds(messageText.c_str(), 0, 0, &x1, &y1, &width, &height);
-  if (width >= display.width()) {
-    debugMessage(String("ERROR: screenAlert '") + messageText + "' is " + abs(display.width()-width) + " pixels too long", 1);
-  }
+  display.fillScreen(ST77XX_BLACK);
 
-  display.setCursor(display.width() / 2 - width / 2, display.height() / 2 + height / 2);
-  display.print(messageText);
+  debugMessage(String("screenAlert text is '") + messageText + "'",2);
+
+  // does message fit on one line?
+  display.setFont(&FreeSans24pt7b);
+  display.getTextBounds(messageText.c_str(), 0, 0, &x1, &y1, &largeFontPhraseOneWidth, &largeFontPhraseOneHeight);
+  if (largeFontPhraseOneWidth <= (display.width()-(display.width()/2-(largeFontPhraseOneWidth/2)))) {
+    // fits with large font, display
+    display.setCursor(((display.width()/2)-(largeFontPhraseOneWidth/2)),((display.height()/2)+(largeFontPhraseOneHeight/2)));
+    display.print(messageText);
+    success = true;
+  }
+  else {
+    // does message fit on two lines?
+    debugMessage(String("text with large font is ") + abs(largeFontPhraseOneWidth - (display.width()-(display.width()/2-(largeFontPhraseOneWidth/2)))) + " pixels too long, trying 2 lines", 1);
+    // does the string break into two pieces based on a space character?
+    uint8_t spaceLocation;
+    String messageTextPartOne, messageTextPartTwo;
+    uint16_t largeFontPhraseTwoWidth, largeFontPhraseTwoHeight;
+
+    spaceLocation = messageText.indexOf(' ');
+    if (spaceLocation) {
+      // has a space character, measure two lines
+      messageTextPartOne = messageText.substring(0,spaceLocation);
+      messageTextPartTwo = messageText.substring(spaceLocation+1);
+      display.getTextBounds(messageTextPartOne.c_str(), 0, 0, &x1, &y1, &largeFontPhraseOneWidth, &largeFontPhraseOneHeight);
+      display.getTextBounds(messageTextPartTwo.c_str(), 0, 0, &x1, &y1, &largeFontPhraseTwoWidth, &largeFontPhraseTwoHeight);
+      debugMessage(String("Message part one with large font is ") + largeFontPhraseOneWidth + " pixels wide",2);
+      debugMessage(String("Message part two with large font is ") + largeFontPhraseTwoWidth + " pixels wide",2);
+    }
+    else {
+      debugMessage("there is no space in message to break message into 2 lines",2);
+    }
+    if (spaceLocation && (largeFontPhraseOneWidth <= (display.width()-(display.width()/2-(largeFontPhraseOneWidth/2)))) && (largeFontPhraseTwoWidth <= (display.width()-(display.width()/2-(largeFontPhraseTwoWidth/2))))) {
+        // fits on two lines, display
+        display.setCursor(((display.width()/2)-(largeFontPhraseOneWidth/2)),(display.height()/2+largeFontPhraseOneHeight/2)-25);
+        display.print(messageTextPartOne);
+        display.setCursor(((display.width()/2)-(largeFontPhraseTwoWidth/2)),(display.height()/2+largeFontPhraseTwoHeight/2)+25);
+        display.print(messageTextPartTwo);
+        success = true;
+    }
+    else {
+      // does message fit on one line with small text?
+      debugMessage("couldn't break text into 2 lines or one line is too long, trying small text",1);
+      uint16_t smallFontWidth, smallFontHeight;
+
+      display.setFont(&FreeSans18pt7b);
+      display.getTextBounds(messageText.c_str(), 0, 0, &x1, &y1, &smallFontWidth, &smallFontHeight);
+      if (smallFontWidth <= (display.width()-(display.width()/2-(smallFontWidth/2)))) {
+        // fits with small size
+        display.setCursor(display.width()/2-smallFontWidth/2,display.height()/2+smallFontHeight/2);
+        display.print(messageText);
+        success = true;
+      }
+      else {
+        // doesn't fit at any size/line split configuration, display as truncated, large text
+        debugMessage(String("text with small font is ") + abs(smallFontWidth - (display.width()-(display.width()/2-(smallFontWidth/2)))) + " pixels too long, displaying truncated", 1);
+        display.setFont(&FreeSans12pt7b);
+        display.getTextBounds(messageText.c_str(), 0, 0, &x1, &y1, &largeFontPhraseOneWidth, &largeFontPhraseOneHeight);
+        display.setCursor(display.width()/2-largeFontPhraseOneWidth/2,display.height()/2+largeFontPhraseOneHeight/2);
+        display.print(messageText);
+      }
+    }
+  }
   debugMessage("screenAlert end",1);
+  return success;
 }
 
 void screenCurrentData()
@@ -471,47 +527,39 @@ bool batteryRead()
 }
 
 bool sensorCO2Init()
-// initializes CO2 sensor to read
+// initializes SCD40 to read
 {
   #ifdef HARDWARE_SIMULATE
     return true;
- #else
+  #else
     char errorMessage[256];
     uint16_t error;
 
     Wire.begin();
-    envSensor.begin(Wire);
+    co2Sensor.begin(Wire, SCD41_I2C_ADDR_62);
 
-    // stop potentially previously started measurement.
-    error = envSensor.stopPeriodicMeasurement();
+    // stop potentially previously started measurement
+    error = co2Sensor.stopPeriodicMeasurement();
     if (error) {
       errorToString(error, errorMessage, 256);
       debugMessage(String(errorMessage) + " executing SCD40 stopPeriodicMeasurement()",1);
       return false;
     }
 
-    // Check onboard configuration settings while not in active measurement mode
-    float offset;
-    error = envSensor.getTemperatureOffset(offset);
-    if (error == 0){
-        error = envSensor.setTemperatureOffset(sensorTempCOffset);
-        if (error == 0)
-          debugMessage(String("Initial SCD40 temperature offset ") + offset + " ,set to " + sensorTempCOffset,2);
-    }
-
-    uint16_t sensor_altitude;
-    error = envSensor.getSensorAltitude(sensor_altitude);
-    if (error == 0){
-      error = envSensor.setSensorAltitude(SITE_ALTITUDE);  // optimizes CO2 reading
-      if (error == 0)
-        debugMessage(String("Initial SCD40 altitude ") + sensor_altitude + " meters, set to " + SITE_ALTITUDE,2);
+    // modify configuration settings while not in active measurement mode
+    error = co2Sensor.setSensorAltitude(SITE_ALTITUDE);  // optimizes CO2 reading
+    if (!error)
+      debugMessage(String("SCD40 altitude set to ") + SITE_ALTITUDE + " meters",2);
+    else {
+      errorToString(error, errorMessage, 256);
+      debugMessage(String(errorMessage) + " executing SCD40 setSensorAltitude()",1);
     }
 
     // Start Measurement.  For high power mode, with a fixed update interval of 5 seconds
     // (the typical usage mode), use startPeriodicMeasurement().  For low power mode, with
     // a longer fixed sample interval of 30 seconds, use startLowPowerPeriodicMeasurement()
-    // uint16_t error = envSensor.startPeriodicMeasurement();
-    error = envSensor.startLowPowerPeriodicMeasurement();
+    // uint16_t error = co2Sensor.startPeriodicMeasurement();
+    error = co2Sensor.startLowPowerPeriodicMeasurement();
     if (error) {
       errorToString(error, errorMessage, 256);
       debugMessage(String(errorMessage) + " executing SCD40 startLowPowerPeriodicMeasurement()",1);
@@ -526,40 +574,47 @@ bool sensorCO2Init()
 }
 
 bool sensorCO2Read()
-// sets global environment values from SCD40 sensor
+// Description: Sets global environment values from SCD40 sensor
+// Parameters: none
+// Output : true if successful read, false if not
+// Improvement : NA  
 {
+  bool success = false;
+
   #ifdef HARDWARE_SIMULATE
-    sensorCO2Simulate();
-    return true;
+    success = true;
+    sensorSCD4xSimulate();
   #else
     char errorMessage[256];
-    bool status;
     uint16_t co2 = 0;
-    float temperature = 0.0f;
+    float temperatureC = 0.0f;
     float humidity = 0.0f;
     uint16_t error;
-
-    debugMessage("CO2 sensor read initiated",1);
+    uint8_t errorCount = 0;
 
     // Loop attempting to read Measurement
-    status = false;
-    while(!status) {
+    debugMessage("CO2 sensor read initiated",1);
+    while(!success) {
       delay(100);
-
+      errorCount++;
+      if (errorCount > co2SensorReadFailureLimit) {
+        debugMessage(String("SCD40 failed to read after ") + errorCount + " attempts",1);
+        break;
+      }
       // Is data ready to be read?
       bool isDataReady = false;
-      error = envSensor.getDataReadyFlag(isDataReady);
+      error = co2Sensor.getDataReadyStatus(isDataReady);
       if (error) {
           errorToString(error, errorMessage, 256);
-          debugMessage(String("Error trying to execute getDataReadyFlag(): ") + errorMessage,1);
+          debugMessage(String("Error trying to execute getDataReadyStatus(): ") + errorMessage,1);
           continue; // Back to the top of the loop
       }
       if (!isDataReady) {
           continue; // Back to the top of the loop
       }
-      debugMessage("CO2 sensor data available",2);
+      debugMessage("SCD40 data available",2);
 
-      error = envSensor.readMeasurement(co2, temperature, humidity);
+      error = co2Sensor.readMeasurement(co2, temperatureC, humidity);
       if (error) {
           errorToString(error, errorMessage, 256);
           debugMessage(String("SCD40 executing readMeasurement(): ") + errorMessage,1);
@@ -567,23 +622,25 @@ bool sensorCO2Read()
       }
       else if (co2 < sensorCO2Min || co2 > sensorCO2Max)
       {
-        debugMessage(String("SCD40 CO2 reading: ") + sensorData.ambientCO2 + " is out of expected range",1);
+        debugMessage(String("SCD40 CO2 reading: ") + co2 + " is out of expected range",1);
         //(sensorData.ambientCO2 < sensorCO2Min) ? sensorData.ambientCO2 = sensorCO2Min : sensorData.ambientCO2 = sensorCO2Max;
         // Implicitly continues back to the top of the loop
       }
       else
       {
-        // Successfully read valid data
-        sensorData.ambientTemperatureF = (temperature*1.8)+32.0;
+        // Valid measurement available, update globals
+        sensorData.ambientTemperatureF = (temperatureC*1.8)+32.0;
         sensorData.ambientHumidity = humidity;
         sensorData.ambientCO2 = co2;
         debugMessage(String("SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",1);
         // Update global sensor readings
-        status = true;  // We have data, can break out of loop
+        success = true;
+        break;
       }
+      delay(100); // reduces readMeasurement() "Not enough data received" errors
     }
   #endif
-  return(true);
+  return(success);
 }
 
 uint8_t co2Range(uint16_t value)
@@ -604,13 +661,13 @@ void powerDisable(uint8_t deepSleepTime)
 
   // power down SCD40 by stopping potentially started measurement then power down SCD40
   #ifndef HARDWARE_SIMULATE
-    uint16_t error = envSensor.stopPeriodicMeasurement();
+    uint16_t error = co2Sensor.stopPeriodicMeasurement();
     if (error) {
       char errorMessage[256];
       errorToString(error, errorMessage, 256);
       debugMessage(String(errorMessage) + " executing SCD40 stopPeriodicMeasurement()",1);
     }
-    envSensor.powerDown();
+    co2Sensor.powerDown();
     debugMessage("power off: SCD40",2);
   #endif
 
