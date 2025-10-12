@@ -449,7 +449,7 @@ void screenHelperBatteryStatus(uint16_t initialX, uint16_t initialY, uint8_t bar
   //    1 = random values, slightly +/- per cycle
   //  cycles = If used, determines how many times the current mode executes before resetting
   // Output : NA
-  // Improvement : implement stable, rapid rise and fall 
+  // Improvement : implement edge value mode, rapid CO2 rise mode 
   {
     static uint8_t currentMode = 1;
     static uint8_t cycleCount = 0;
