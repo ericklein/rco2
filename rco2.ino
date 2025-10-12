@@ -22,6 +22,7 @@
 // screen support (ST7789 240x135 pixels color TFT)
 #include <Adafruit_ST7789.h>
 Adafruit_ST7789 display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
+#include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/FreeSans12pt7b.h>
 #include <Fonts/FreeSans18pt7b.h>
 #include <Fonts/FreeSans24pt7b.h>
@@ -38,8 +39,8 @@ ezButton buttonOne(buttonD1Pin,INPUT_PULLDOWN);
 typedef struct {
   // SCD40 data
   float     ambientTemperatureF;
-  float     ambientHumidity;      // RH [%]  
-  uint16_t  ambientCO2;           // ppm
+  float     ambientHumidity;             // RH [%]  
+  uint16_t  ambientCO2[co2GraphPoints];  // ppm
 } envData;
 envData sensorData;
 
@@ -54,7 +55,7 @@ hdweData hardwareData;
 // Utility class used to streamline accumulating sensor values
 Measure totalCO2, totalTemperatureF, totalHumidity;
 
-long timeLastSample  = -(sensorSampleInterval*1000);  // set to trigger sample on first iteration of loop()
+long timeLastSample  = -(sensorSampleIntervalMS);  // set to trigger sample on first iteration of loop()
 uint8_t screenCurrent = 0;
 
 void setup()
@@ -64,7 +65,7 @@ void setup()
     Serial.begin(115200);
     // wait for serial port connection
     while (!Serial);
-    debugMessage(String("Starting RCO2 with ") + sensorSampleInterval + " second sample interval",1);
+    debugMessage(String("Starting RCO2 with ") + (sensorSampleIntervalMS/1000) + " second sample interval",1);
   #endif
 
   #ifdef HARDWARE_SIMULATE
@@ -91,6 +92,11 @@ void setup()
 
   screenAlert("Initializing");
 
+    // initialize retained CO2 data values array for graphing
+  for(uint8_t loop=0;loop<co2GraphPoints;loop++) {
+    sensorData.ambientCO2[loop] = -1;
+  }
+
   // initialize battery monitor
   batteryInit();
 
@@ -100,9 +106,9 @@ void setup()
     debugMessage("Environment sensor failed to initialize",1);
     screenAlert("No SCD40");
     // Hardware deep sleep typically resolves it
-    powerDisable(hardwareRebootInterval);
+    powerDisable(hardwareErrorSleepTimeμS);
   }
-  buttonOne.setDebounceTime(buttonDebounceDelay);
+  buttonOne.setDebounceTime(buttonDebounceDelayMS);
   // Explicit start-up delay because the SCD40 takes ~7 seconds to return valid CO2 readings.
   delay(7000);
 }
@@ -139,7 +145,7 @@ void loop()
   }
 
   // is it time to read the sensor?
-  if((timeCurrent - timeLastSample) >= (sensorSampleInterval * 1000)) // converting sensorSampleInterval into milliseconds
+  if((timeCurrent - timeLastSample) >= (sensorSampleIntervalMS))
   {
     if (!sensorCO2Read())
     {
@@ -148,7 +154,7 @@ void loop()
     else
     {
       // Received new data so update aggregate information
-      totalCO2.include(sensorData.ambientCO2);
+      totalCO2.include(sensorData.ambientCO2[co2GraphPoints-1]);
       totalTemperatureF.include(sensorData.ambientTemperatureF);
       totalHumidity.include(sensorData.ambientHumidity);// refresh current screen based on new sensor reading
       // Update the TFT display with new readings on the current screen (hence false)
@@ -289,8 +295,8 @@ void screenCurrentData()
   display.setTextSize(1);
   display.setCursor(xMargins,yCO2);
   display.print(String("CO2: "));
-  display.setTextColor(warningColor[co2Range(sensorData.ambientCO2)]);  // Use highlight color look-up table
-  display.println(sensorData.ambientCO2,0);
+  display.setTextColor(warningColor[co2Range(sensorData.ambientCO2[co2GraphPoints-1])]);  // Use highlight color look-up table
+  display.println(sensorData.ambientCO2[co2GraphPoints-1],0);
   display.setTextColor(ST77XX_WHITE);
 
   // Display temperature with symbol from custom glyphs
@@ -314,7 +320,7 @@ void screenColor()
 // Represents CO2 value on screen as a single color fill
 {
   debugMessage("screenColor start",1);
-  display.fillScreen(warningColor[co2Range(sensorData.ambientCO2)]);  // Use highlight color LUT
+  display.fillScreen(warningColor[co2Range(sensorData.ambientCO2[co2GraphPoints-1])]);  // Use highlight color LUT
   debugMessage("screenColor end",1);
 }
 
@@ -332,8 +338,8 @@ void screenSaver()
   x = random(xMargins,display.width()-xMargins-64);  // 64 pixels leaves room for 4 digit CO2 value
   y = random(35,display.height()-yMargins); // 35 pixels leaves vertical room for text display
   display.setCursor(x,y);
-  display.setTextColor(warningColor[co2Range(sensorData.ambientCO2)]);  // Use highlight color LUT
-  display.println(sensorData.ambientCO2);
+  display.setTextColor(warningColor[co2Range(sensorData.ambientCO2[co2GraphPoints-1])]);  // Use highlight color LUT
+  display.println(sensorData.ambientCO2[co2GraphPoints-1]);
   debugMessage("screenSaver end",1);
 }
 
@@ -398,15 +404,105 @@ void screenAggregateData()
   //screenHelperBatteryStatus((display.width()-xMargins-batteryBarWidth-3),(display.height()-yMargins-batteryBarHeight), batteryBarWidth, batteryBarHeight);
 }
 
+// Draw a simple graph of recent CO2 values. Time-ordered data to be plottted is stored in an array with the
+// most recent point last.  Values of -1 are to be skipped in the plotting, allowing the line of points to
+// always have the most recent value at the right edge of the graph but still work if not enough data has yet
+// been reported to fully cover the plot area.
 void screenGraph()
 // Displays CO2 values over time as a graph
 {
-  // screenGraph specific screen layout assists
-  // const uint16_t ySparkline = 95;
-  // const uint16_t sparklineHeight = 40;
+  int16_t loop, x1, y1;
+  uint16_t width, height, deltax, w1, h1, x, y, xp, yp;
+  uint16_t gx0, gy0, gx1, gy1;  // Drawing area bounding box
+  String minlabel, maxlabel, xlabel;
+  float c, minvalue, maxvalue;
+  bool firstpoint = true, nodata = true;
 
   debugMessage("screenGraph start",1);
-  screenAlert("Graph");
+
+  // Set drawing area bounding box values
+  gx0 = 50;
+  gy0 = 10;
+  gx1 = display.width()-30;
+  gy1 = display.height()-30;  // Room at the bottom for the graph label
+
+  display.fillScreen(ST77XX_BLACK);
+  // display.setFont(&FreeSans9pt7b);
+  display.setFont();
+
+  // Scan the retained CO2 data for max & min to scale the plot
+  minvalue = 5000;
+  maxvalue = 0;
+  for(loop=0;loop<co2GraphPoints;loop++) {
+    if(sensorData.ambientCO2[loop] == -1) continue;   // Skip "empty" slots
+    nodata = false;  // At least one data point
+    if(sensorData.ambientCO2[loop] < minvalue) minvalue = sensorData.ambientCO2[loop];
+    if(sensorData.ambientCO2[loop] > maxvalue) maxvalue = sensorData.ambientCO2[loop];
+  }
+  // Deal with no data condition (e.g., just booted)
+  if(nodata) {
+    // Label plot with "awating" message
+    display.setTextColor(ST77XX_WHITE);
+    xlabel = String("Awaiting CO2 Values");  // Center overall graph label below the drawing area
+    display.getTextBounds(xlabel.c_str(),0,0,&x1,&y1,&w1,&h1);
+    display.setCursor( ((display.width()-w1)/2),(display.height()-(h1/2)) );
+    display.print(xlabel);
+    // Set reasonable bounds for the (empty) plot
+    minvalue = 400;
+    maxvalue = 1200;
+  }
+  else {
+    // We have data to plot, so say so
+    display.setTextColor(ST77XX_WHITE);
+    xlabel = String("Recent CO2 Values");  // Center overall graph label below the drawing area
+    display.getTextBounds(xlabel.c_str(),0,0,&x1,&y1,&w1,&h1);
+    display.setCursor( ((display.width()-w1)/2),(display.height()-(h1/2)) );
+    display.print(xlabel);
+
+    // Pad min and max CO2 to add room and be multiples of 50 (for nicer axis labels)
+    minvalue = (int(minvalue)/50)*50;
+    maxvalue = ((int(maxvalue)/50)+1)*50;
+  }
+  
+  display.setTextColor(ST77XX_BLUE);
+  // Draw Y axis labels
+  minlabel = String(int(minvalue));
+  maxlabel = String(int(maxvalue));
+  display.getTextBounds(maxlabel.c_str(),0,0,&x1,&y1,&w1,&h1);
+  display.setCursor(gx0-5-w1,h1+5); display.print(maxlabel);
+  display.getTextBounds(minlabel.c_str(),0,0,&x1,&y1,&w1,&h1);
+  display.setCursor(gx0-5-w1,gy1); display.print(minlabel);
+
+  // Draw axis lines
+  display.drawLine(gx0,gy0,gx0,gy1,ST77XX_BLUE);
+  display.drawLine(gx0,gy1,gx1,gy1,ST77XX_BLUE);
+  display.setTextColor(ST77XX_WHITE);
+
+  // Plot however many data points we have both with filled circles at each
+  // point and lines connecting the points.  Color the filled circles with the
+  // appropriate CO2 warning level color.
+  deltax = (gx1 - gx0 - 10)/ (co2GraphPoints-1);  // 10 pixel padding for Y axis
+  xp = gx0;
+  yp = gy1;
+  for(loop=0;loop<co2GraphPoints;loop++) {
+    if(sensorData.ambientCO2[loop] == -1) continue;
+    c = sensorData.ambientCO2[loop];
+    x = gx0 + 10 + (loop*deltax);  // Include 10 pixel padding for Y axis
+    y = gy1 - (((c - minvalue)/(maxvalue-minvalue)) * (gy1-gy0));
+    display.fillCircle(x,y,4,warningColor[co2Range(c)]);
+    if(firstpoint) {
+      // If this is the first drawn point then don't try to draw a line
+      firstpoint = false;
+    }
+    else {
+      // Draw line from previous point (if one) to this point
+      display.drawLine(xp,yp,x,y,ST77XX_WHITE);
+    }
+    // Save x & y of this point to use as previous point for next one.
+    xp = x;
+    yp = y;
+  }
+
   debugMessage("screenGraph end",1);
 }
 
@@ -491,10 +587,10 @@ void screenHelperBatteryStatus(uint16_t initialX, uint16_t initialY, uint8_t bar
     }
     sensorData.ambientTemperatureF = simulatedTempF;
     sensorData.ambientHumidity = simulatedHumidity;
-    sensorData.ambientCO2 = simulatedCO2;
+    retainCO2(simulatedCO2);
 
     debugMessage(String("Simulated temp: ") + sensorData.ambientTemperatureF + "F, humidity: " + sensorData.ambientHumidity
-      + "%, CO2: " + sensorData.ambientCO2 + "ppm",1);
+      + "%, CO2: " + sensorData.ambientCO2[co2GraphPoints-1] + "ppm",1);
   }
 #endif
 
@@ -675,8 +771,8 @@ bool sensorCO2Read()
         // Valid measurement available, update globals
         sensorData.ambientTemperatureF = (temperatureC*1.8)+32.0;
         sensorData.ambientHumidity = humidity;
-        sensorData.ambientCO2 = co2;
-        debugMessage(String("SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",1);
+        retainCO2(co2);
+        debugMessage(String("SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2[co2GraphPoints-1] + " ppm",1);
         // Update global sensor readings
         success = true;
         break;
@@ -685,6 +781,15 @@ bool sensorCO2Read()
     }
   #endif
   return(success);
+}
+
+// Accumulate a CO2 value into the CO2 data array, LIFO queue
+void retainCO2(uint16_t co2)
+{
+  for(uint8_t loop=1;loop<co2GraphPoints;loop++) {
+    sensorData.ambientCO2[loop-1] = sensorData.ambientCO2[loop];
+  }
+  sensorData.ambientCO2[co2GraphPoints-1] = co2;
 }
 
 uint8_t co2Range(uint16_t co2) 
@@ -699,7 +804,7 @@ uint8_t co2Range(uint16_t co2)
   return co2Range;
 }
 
-void powerDisable(uint8_t deepSleepTime)
+void powerDisable(uint32_t deepSleepTime)
 // turns off component hardware then puts ESP32 into deep sleep mode for specified seconds
 {
   debugMessage("powerDisable start",1);
@@ -737,7 +842,7 @@ void powerDisable(uint8_t deepSleepTime)
     debugMessage("power off: ESP32V2 I2C",2);
   #endif
 
-  esp_sleep_enable_timer_wakeup(deepSleepTime*1000000); // ESP microsecond modifier
+  esp_sleep_enable_timer_wakeup(deepSleepTime);
   debugMessage(String("powerDisable complete: ESP32 deep sleep for ") + (deepSleepTime) + " seconds",1);
   esp_deep_sleep_start();
 }
