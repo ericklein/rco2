@@ -289,7 +289,7 @@ void screenCurrentData()
   display.setTextSize(1);
   display.setCursor(xMargins,yCO2);
   display.print(String("CO2: "));
-  display.setTextColor(co2Color[co2Range(sensorData.ambientCO2)]);  // Use highlight color look-up table
+  display.setTextColor(warningColor[co2Range(sensorData.ambientCO2)]);  // Use highlight color look-up table
   display.println(sensorData.ambientCO2,0);
   display.setTextColor(ST77XX_WHITE);
 
@@ -314,7 +314,7 @@ void screenColor()
 // Represents CO2 value on screen as a single color fill
 {
   debugMessage("screenColor start",1);
-  display.fillScreen(co2Color[co2Range(sensorData.ambientCO2)]);  // Use highlight color LUT
+  display.fillScreen(warningColor[co2Range(sensorData.ambientCO2)]);  // Use highlight color LUT
   debugMessage("screenColor end",1);
 }
 
@@ -332,7 +332,7 @@ void screenSaver()
   x = random(xMargins,display.width()-xMargins-64);  // 64 pixels leaves room for 4 digit CO2 value
   y = random(35,display.height()-yMargins); // 35 pixels leaves vertical room for text display
   display.setCursor(x,y);
-  display.setTextColor(co2Color[co2Range(sensorData.ambientCO2)]);  // Use highlight color LUT
+  display.setTextColor(warningColor[co2Range(sensorData.ambientCO2)]);  // Use highlight color LUT
   display.println(sensorData.ambientCO2);
   debugMessage("screenSaver end",1);
 }
@@ -369,7 +369,7 @@ void screenAggregateData()
 
   // Fill in the maximum values row
   display.setCursor(xCO2Column, yMaxRow);
-  display.setTextColor(co2Color[co2Range(totalCO2.getMax())]);  // Use highlight color look-up table
+  display.setTextColor(warningColor[co2Range(totalCO2.getMax())]);  // Use highlight color look-up table
   display.print(totalCO2.getMax(),0);
   display.setTextColor(ST77XX_WHITE);
   
@@ -378,7 +378,7 @@ void screenAggregateData()
 
   // Fill in the average value row
   display.setCursor(xCO2Column, yAvgRow);
-  display.setTextColor(co2Color[co2Range(totalCO2.getAverage())]);  // Use highlight color look-up table
+  display.setTextColor(warningColor[co2Range(totalCO2.getAverage())]);  // Use highlight color look-up table
   display.print(totalCO2.getAverage(),0);
   display.setTextColor(ST77XX_WHITE);
 
@@ -387,7 +387,7 @@ void screenAggregateData()
 
   // Fill in the minimum value row
   display.setCursor(xCO2Column,yMinRow);
-  display.setTextColor(co2Color[co2Range(totalCO2.getMin())]);  // Use highlight color look-up table
+  display.setTextColor(warningColor[co2Range(totalCO2.getMin())]);  // Use highlight color look-up table
   display.print(totalCO2.getMin(),0);
   display.setTextColor(ST77XX_WHITE);
 
@@ -441,17 +441,60 @@ void screenHelperBatteryStatus(uint16_t initialX, uint16_t initialY, uint8_t bar
     debugMessage(String("SIMULATED Battery voltage: ") + hardwareData.batteryVoltage + "v, percent: " + hardwareData.batteryPercent + "%",1);
   }
 
-  void sensorCO2Simulate()
-  // Simulate ranged data from the SCD40
-  // Improvement - implement stable, rapid rise and fall 
+  void sensorSCD4xSimulate(uint8_t mode = 0, uint8_t cycles = 0)
+  // Description: Simulates temp, humidity, and CO2 values from Sensirion SCD4X sensor
+  // Parameters:
+  //  mode
+  //    default = random values, ignores cycles parameter
+  //    1 = random values, slightly +/- per cycle
+  //  cycles = If used, determines how many times the current mode executes before resetting
+  // Output : NA
+  // Improvement : implement edge value mode, rapid CO2 rise mode 
   {
-    // Temperature in Fahrenheit
-    sensorData.ambientTemperatureF = ((random(sensorTempMin,sensorTempMax) / 100.0)*1.8)+32.0;
-    // Humidity
-    sensorData.ambientHumidity = random(sensorHumidityMin,sensorHumidityMax) / 100.0;
-    // CO2
-    sensorData.ambientCO2 = random(sensorCO2Min, sensorCO2Max);
-    debugMessage(String("SIMULATED SCD40: ") + sensorData.ambientTemperatureF + "F, " + sensorData.ambientHumidity + "%, " + sensorData.ambientCO2 + " ppm",1);
+    static uint8_t currentMode = 1;
+    static uint8_t cycleCount = 0;
+    static float simulatedTempF;
+    static float simulatedHumidity;
+    static uint16_t simulatedCO2;
+
+    if (mode != currentMode) {
+      cycleCount = 0;
+      currentMode = mode;
+    }
+    switch (currentMode) {
+    case 1: // 1 = random values, slightly +/- per cycle
+      if (cycleCount == cycles) {
+        cycleCount = 0;
+      }
+      if (!cycleCount) {
+        // create new base values
+        simulatedTempF = randomFloatRange(sensorTempMinF,sensorTempMaxF);
+        simulatedHumidity = randomFloatRange(sensorHumidityMin,sensorHumidityMax);
+        simulatedCO2 = random(sensorCO2Min, sensorCO2Max);
+        cycleCount++;
+      }
+      else
+      {
+        // slightly +/- CO2 value
+        int8_t sign = random(0, 2) == 0 ? -1 : 1;
+        simulatedCO2 = simulatedCO2 + (sign * random(0, sensorCO2VariabilityRange));
+        // slightly +/- temp value
+        // slightly +/- humidity value
+        cycleCount++;
+      }
+      break;
+    default: // random values, ignores cycles value
+      simulatedTempF = randomFloatRange(sensorTempMinF,sensorTempMaxF);
+      simulatedHumidity = randomFloatRange(sensorHumidityMin,sensorHumidityMax);
+      simulatedCO2 = random(sensorCO2Min, sensorCO2Max);
+      break;
+    }
+    sensorData.ambientTemperatureF = simulatedTempF;
+    sensorData.ambientHumidity = simulatedHumidity;
+    sensorData.ambientCO2 = simulatedCO2;
+
+    debugMessage(String("Simulated temp: ") + sensorData.ambientTemperatureF + "F, humidity: " + sensorData.ambientHumidity
+      + "%, CO2: " + sensorData.ambientCO2 + "ppm",1);
   }
 #endif
 
@@ -584,7 +627,7 @@ bool sensorCO2Read()
 
   #ifdef HARDWARE_SIMULATE
     success = true;
-    sensorSCD4xSimulate();
+    sensorSCD4xSimulate(1,5);
   #else
     char errorMessage[256];
     uint16_t co2 = 0;
@@ -644,15 +687,16 @@ bool sensorCO2Read()
   return(success);
 }
 
-uint8_t co2Range(uint16_t value)
-// places CO2 value into a three band range for labeling and coloring. See config.h for more information
+uint8_t co2Range(uint16_t co2) 
+// converts co2 value to index value for labeling and color
 {
-  if (value < co2Warning)
-    return 0;
-  else if (value < co2Alarm)
-    return 1;
-  else
-    return 2;
+  uint8_t co2Range = 
+    (co2 <= co2Fair) ? 0 :
+    (co2 <= co2Poor) ? 1 :
+    (co2 <= co2Bad)  ? 2 : 3;
+
+  debugMessage(String("CO2 input of ") + co2 + " yields co2Range of " + co2Range, 2);
+  return co2Range;
 }
 
 void powerDisable(uint8_t deepSleepTime)
@@ -696,6 +740,12 @@ void powerDisable(uint8_t deepSleepTime)
   esp_sleep_enable_timer_wakeup(deepSleepTime*1000000); // ESP microsecond modifier
   debugMessage(String("powerDisable complete: ESP32 deep sleep for ") + (deepSleepTime) + " seconds",1);
   esp_deep_sleep_start();
+}
+
+float randomFloatRange(uint16_t minVal, uint16_t maxVal) {
+  // Scale the range up to hundredths
+  uint32_t scaled = random((maxVal - minVal) * 100 + 1);  
+  return minVal + (scaled / 100.0f);
 }
 
 void debugMessage(String messageText, int messageLevel)
