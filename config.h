@@ -68,8 +68,8 @@ const uint16_t warningColor[4] = {
   0xF800  // Red = "Bad"
 };
 
-const uint16_t sensorCO2Min =      400;   // in ppm
-const uint16_t sensorCO2Max =      2000;  // in ppm
+const uint16_t sensorCO2Min =      400;   // ppm per datasheet, technically 0
+const uint16_t sensorCO2Max =      2000;  // ppm per datasheet, technically 40000
 const uint8_t co2SensorReadFailureLimit = 20;
 
 // Hardware
