@@ -55,7 +55,7 @@ hdweData hardwareData;
 // Utility class used to streamline accumulating sensor values
 Measure totalCO2, totalTemperatureF, totalHumidity;
 
-uint32_t timeLastSampleMS  = -(sensorSampleIntervalMS);  // set to trigger sample on first iteration of loop()
+int32_t timeLastSampleMS  = -(sensorSampleIntervalMS);  // set to trigger sample on first iteration of loop()
 uint8_t screenCurrent = 0;
 
 void setup()
