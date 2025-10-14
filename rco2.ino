@@ -55,7 +55,7 @@ hdweData hardwareData;
 // Utility class used to streamline accumulating sensor values
 Measure totalCO2, totalTemperatureF, totalHumidity;
 
-long timeLastSample  = -(sensorSampleIntervalMS);  // set to trigger sample on first iteration of loop()
+uint32_t timeLastSampleMS  = -(sensorSampleIntervalMS);  // set to trigger sample on first iteration of loop()
 uint8_t screenCurrent = 0;
 
 void setup()
@@ -116,7 +116,7 @@ void setup()
 void loop()
 {
   // update current timer value
-  unsigned long timeCurrent = millis();
+  uint32_t timeCurrentMS = millis();
 
   // Check if battery is supplying enough voltage to drive the SCD40
   // if (lipoBattery.isActiveAlert())
@@ -145,7 +145,7 @@ void loop()
   }
 
   // is it time to read the sensor?
-  if((timeCurrent - timeLastSample) >= (sensorSampleIntervalMS))
+  if((timeCurrentMS - timeLastSampleMS) >= (sensorSampleIntervalMS))
   {
     if (!sensorCO2Read())
     {
@@ -161,7 +161,7 @@ void loop()
       screenUpdate(true);
     }
     // Save current timestamp to restart sample delay interval
-    timeLastSample = timeCurrent;
+    timeLastSampleMS = timeCurrentMS;
   }
 }
 
@@ -443,8 +443,8 @@ void screenGraph()
     xlabel = String("Recent CO2 values");  // Center overall graph label below the drawing area
 
     // since we have data, pad min and max CO2 to add room and be multiples of 50 (for nicer axis labels)
-    minvalue = (int(minvalue)/50)*50;
-    maxvalue = ((int(maxvalue)/50)+1)*50;
+    minvalue = (uint16_t(minvalue)/50)*50;
+    maxvalue = ((uint16_t(maxvalue)/50)+1)*50;
   }
   debugMessage(String("Min / max: ") + minvalue + " / " + maxvalue,2);
 
@@ -456,8 +456,8 @@ void screenGraph()
   graphY1 = display.height() - text1Height - yMargins - 5;  // Room at the bottom for the graph label
 
   // calculate width and height of CO2 value labels
-  minlabel = String(int(minvalue));
-  maxlabel = String(int(maxvalue));
+  minlabel = String(uint16_t(minvalue));
+  maxlabel = String(uint16_t(maxvalue));
   display.getTextBounds(maxlabel.c_str(),0,0,&x1,&y1,&text1Width,&text1Height);
   display.getTextBounds(minlabel.c_str(),0,0,&x1,&y1,&text2Width,&text2Height);
 
@@ -852,7 +852,7 @@ float randomFloatRange(uint16_t minVal, uint16_t maxVal) {
   return minVal + (scaled / 100.0f);
 }
 
-void debugMessage(String messageText, int messageLevel)
+void debugMessage(String messageText, uint8_t messageLevel)
 // wraps Serial.println as #define conditional
 {
   #ifdef DEBUG
