@@ -7,7 +7,7 @@
 
 // Configuration Step 2: Set debug parameters
 // comment out to turn off; 1 = summary, 2 = verbose
-// #define DEBUG 2
+#define DEBUG 2
 
 // Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
@@ -17,7 +17,7 @@
 
 // Buttons
 const uint8_t buttonD1Pin = 1; // initially LOW
-const uint16_t buttonDebounceDelay = 50; // time in milliseconds to debounce button
+const uint16_t buttonDebounceDelayMS = 50; // time to debounce button
 
 // Display
 const uint8_t screenRotation = 1; // rotation 3 orients 0,0 next to D0 button
@@ -44,11 +44,14 @@ const uint16_t batteryVoltageMax = 420;
 
 // CO2 sensor
 #ifdef DEBUG
-	// time between samples in seconds
-  const uint16_t sensorSampleInterval = 30;
+	// time between samples
+  const uint32_t sensorSampleIntervalMS = 30000;
 #else
-  const uint16_t sensorSampleInterval = 60;
+  const uint32_t sensorSampleIntervalMS = 60000;
 #endif
+
+// How many CO2 points to retain for the graphing screen
+const uint8_t co2GraphPoints=10;
 
 // CO2 value thresholds for labeling
 const uint16_t co2Fair =  800;
@@ -65,10 +68,9 @@ const uint16_t warningColor[4] = {
   0xF800  // Red = "Bad"
 };
 
-const uint16_t sensorCO2Min =      400;   // in ppm
-const uint16_t sensorCO2Max =      2000;  // in ppm
+const uint16_t sensorCO2Min =      400;   // ppm per datasheet, technically 0
+const uint16_t sensorCO2Max =      2000;  // ppm per datasheet, technically 40000
 const uint8_t co2SensorReadFailureLimit = 20;
 
 // Hardware
-// Sleep time in seconds if hardware error occurs
-const uint8_t hardwareRebootInterval = 10;
+const uint32_t hardwareErrorSleepTimeμS = 10000000;  // sleep time if hardware error occurs
