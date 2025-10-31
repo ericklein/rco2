@@ -9,6 +9,8 @@
 #include "secrets.h"  // private credentials
 #include "measure.h"  // Utility class for easy handling aggregate sensor data
 
+#include "driver/rtc_io.h"
+
 #ifndef HARDWARE_SIMULATE
   // instanstiate scd40 hardware object
   #include <SensirionI2cScd4x.h>
@@ -56,7 +58,7 @@ hdweData hardwareData;
 Measure totalCO2, totalTemperatureF, totalHumidity;
 
 int32_t timeLastSampleMS  = -(sensorSampleIntervalMS);  // set to trigger sample on first iteration of loop()
-uint32_t timeLastSleepMS;
+uint32_t timeLastSleepMS = 0;
 uint8_t screenCurrent = 0;
 
 void setup()
@@ -75,14 +77,18 @@ void setup()
     randomSeed(analogRead(0));
   #endif
 
-  // Use ESP32 external trigger ext0 for one button wakeup interupt
-  esp_err_t result = esp_sleep_enable_ext0_wakeup(WAKE_FROM_SLEEP_PIN,1);  //1 = High, 0 = Low
-  if (result == ESP_OK) {
-    debugMessage("EXT0 Wake-Up set successfully as wake-up source.",1);
-  } 
-  else {
-    debugMessage("Failed to set EXT0 Wake-Up as wake-up source.",1);
-  }
+  // // Use ESP32 external trigger ext0 for one button wakeup interupt
+
+  // rtc_gpio_pullup_dis(WAKE_FROM_SLEEP_PIN);
+  // rtc_gpio_pulldown_en(WAKE_FROM_SLEEP_PIN);
+
+  // esp_err_t result = esp_sleep_enable_ext0_wakeup(WAKE_FROM_SLEEP_PIN,1);  //1 = High, 0 = Low
+  // if (result == ESP_OK) {
+  //   debugMessage("EXT0 Wake-Up set successfully as wake-up source.",1);
+  // } 
+  // else {
+  //   debugMessage("Failed to set EXT0 Wake-Up as wake-up source.",1);
+  // }
 
   // initialize CO2 array for graphing
   for(uint8_t loop=0;loop<co2GraphPoints;loop++) {
@@ -120,11 +126,12 @@ void setup()
     // Hardware deep sleep typically resolves it
     powerDeepSleep(hardwareErrorSleepTimeμS);
   }
-  // Explicit start-up delay because the SCD40 takes ~7 seconds to return valid CO2 readings.
-  // ? needed with single shot?
-  delay(7000);
-
-  timeLastSleepMS = millis(); // compensate for the long delay()
+  #ifndef HARDWARE_SIMULATE
+    // Explicit start-up delay because the SCD40 takes ~7 seconds to return valid CO2 readings.
+    // ? needed with single shot?
+    // delay(7000);
+    // timeLastSleepMS = millis(); // compensate for the long delay()
+  #endif
 }
 
 // new loop()
@@ -137,6 +144,47 @@ void setup()
 
 void loop()
 {
+    // esp_sleep_wakeup_cause_t wakeup_reason;
+    // wakeup_reason = esp_sleep_get_wakeup_cause();
+    // switch (wakeup_reason)
+    // {
+    //   case ESP_SLEEP_WAKEUP_TIMER : // do nothing
+    //   {
+    //     debugMessage("wakeup cause: timer",1);
+    //   }
+    //   break;
+    //   case ESP_SLEEP_WAKEUP_EXT0 :
+    //   {
+    //     debugMessage("wakeup cause: RTC gpio pin",1);
+    //     delay(500);  // Debounce?
+    //   }
+    //   break;
+    //   // case ESP_SLEEP_WAKEUP_EXT1 :
+    //   // {
+    //   //   uint16_t gpioReason = log(esp_sleep_get_ext1_wakeup_status())/log(2);
+    //   //   debugMessage(String("wakeup cause: RTC gpio pin: ") + gpioReason,1);
+    //   //   // implment switch (gpioReason)
+    //   // }
+    //   // break;
+    //   // case ESP_SLEEP_WAKEUP_TOUCHPAD : 
+    //   // {
+    //   //   debugMessage("wakup cause: touchpad",1);
+    //   // }  
+    //   // break;
+    //   // case ESP_SLEEP_WAKEUP_ULP : 
+    //   // {
+    //   //   debugMessage("wakeup cause: program",1);
+    //   // }  
+    //   // break; 
+    //   default :
+    //   {
+    //     // likely caused by reset after firmware load
+    //     debugMessage(String("Wakeup likely cause: first boot after firmware flash, reason: ") + wakeup_reason,1);
+    //   }
+    //   break;
+    // }
+
+
   // Check if battery is supplying enough voltage to drive the SCD40
   // if (lipoBattery.isActiveAlert())
   // {
@@ -186,48 +234,13 @@ void loop()
   if((millis() - timeLastSleepMS) >= (screenDisplayTimeMS)) {
     powerLightSleep(hardwareLightSleepTimeμS);
 
+    // // temporary
+    // delay(3000);
+    debugMessage(String("I'm back"),1);
+
     // after wakeup
     timeLastSleepMS = millis();
     powerLightWakeUp();
-
-    esp_sleep_wakeup_cause_t wakeup_reason;
-    wakeup_reason = esp_sleep_get_wakeup_cause();
-    switch (wakeup_reason)
-    {
-      case ESP_SLEEP_WAKEUP_TIMER : // do nothing
-      {
-        debugMessage("wakeup cause: timer",1);
-      }
-      break;
-      case ESP_SLEEP_WAKEUP_EXT0 :
-      {
-        debugMessage("wakeup cause: RTC gpio pin",1);
-      }
-      break;
-      // case ESP_SLEEP_WAKEUP_EXT1 :
-      // {
-      //   uint16_t gpioReason = log(esp_sleep_get_ext1_wakeup_status())/log(2);
-      //   debugMessage(String("wakeup cause: RTC gpio pin: ") + gpioReason,1);
-      //   // implment switch (gpioReason)
-      // }
-      // break;
-      // case ESP_SLEEP_WAKEUP_TOUCHPAD : 
-      // {
-      //   debugMessage("wakup cause: touchpad",1);
-      // }  
-      // break;
-      // case ESP_SLEEP_WAKEUP_ULP : 
-      // {
-      //   debugMessage("wakeup cause: program",1);
-      // }  
-      // break; 
-      default :
-      {
-        // likely caused by reset after firmware load
-        debugMessage(String("Wakeup likely cause: first boot after firmware flash, reason: ") + wakeup_reason,1);
-      }
-      break;
-    }
   }
 }
 
@@ -887,11 +900,12 @@ void powerLightSleep(uint32_t sleepTime)
 {
   debugMessage(String("powerLightSleep() start"),1);
 
-  // sleep the display
-  display.enableSleep(true);
-  debugMessage(String("powerLightSleep(): display sleep"),1);
+  // // sleep the display
+  // display.enableSleep(true);
+  // delay(120);             // Wait for the display to enter sleep mode
+  // debugMessage(String("powerLightSleep(): display sleep"),1);
 
-  // sleep the CO2 sensor
+  // // sleep the CO2 sensor
   // #ifndef HARDWARE_SIMULATE
   //   static char errorMessage[64];
   //   static int16_t error;
@@ -905,8 +919,14 @@ void powerLightSleep(uint32_t sleepTime)
   //     debugMessage("powerLightSleep(): SCD40 off",1);
   // #endif
 
-  // light sleep the ESP32
-  esp_sleep_enable_timer_wakeup(sleepTime);
+  //light sleep the ESP32
+  esp_err_t result = esp_sleep_enable_timer_wakeup(sleepTime);
+  delay(100);
+  if (result == ESP_OK) {
+    Serial.println("Timer Wake-Up set successfully as wake-up source.");
+} else {
+    Serial.println("Failed to set Timer Wake-Up as wake-up source.");
+}
   debugMessage(String("powerLightSleep() end: ESP32 light sleep for ") + (sleepTime/1000000) + " seconds",1);
   esp_light_sleep_start();
 }
@@ -919,11 +939,15 @@ void powerLightWakeUp()
 {
   debugMessage(String("powerLightWakeUp() start"),1);
 
-  // sleep the display
-  display.enableSleep(false);
+  // // wake the display
+  // display.enableSleep(false);
+  // delay(120);             // Wait for the display to enter sleep mode
+  // debugMessage(String("powerLightSleep(): display wakeup"),1);
 
-  // // wake up the CO2 sensor?
-  // co2Sensor.wakeUp();
+  // // // wake up the CO2 sensor?
+  // #ifndef HARDWARE_SIMULATE
+  //   co2Sensor.wakeUp();
+  // #endif
 
   debugMessage(String("powerLightWakeUp() end"),1);
 }

@@ -11,7 +11,7 @@
 
 // Configuration Step 3: simulate hardware inputs, returning random but plausible values
 // comment out to turn off
-#define HARDWARE_SIMULATE
+// #define HARDWARE_SIMULATE
 
 // Configuration variables that change rarely
 
