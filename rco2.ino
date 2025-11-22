@@ -152,46 +152,6 @@ void setup()
 
 void loop()
 {
-    esp_sleep_wakeup_cause_t wakeup_reason;
-    wakeup_reason = esp_sleep_get_wakeup_cause();
-    switch (wakeup_reason)
-    {
-      case ESP_SLEEP_WAKEUP_TIMER : // do nothing
-      {
-        debugMessage("wakeup cause: timer",1);
-      }
-      break;
-      case ESP_SLEEP_WAKEUP_EXT0 :
-      {
-        debugMessage("wakeup cause: RTC gpio pin",1);
-        delay(500);  // Debounce?
-      }
-      break;
-      // case ESP_SLEEP_WAKEUP_EXT1 :
-      // {
-      //   uint16_t gpioReason = log(esp_sleep_get_ext1_wakeup_status())/log(2);
-      //   debugMessage(String("wakeup cause: RTC gpio pin: ") + gpioReason,1);
-      //   // implment switch (gpioReason)
-      // }
-      // break;
-      // case ESP_SLEEP_WAKEUP_TOUCHPAD : 
-      // {
-      //   debugMessage("wakup cause: touchpad",1);
-      // }  
-      // break;
-      // case ESP_SLEEP_WAKEUP_ULP : 
-      // {
-      //   debugMessage("wakeup cause: program",1);
-      // }  
-      // break; 
-      default :
-      {
-        // likely caused by reset after firmware load
-        // debugMessage(String("Wakeup likely cause: first boot after firmware flash, reason: ") + wakeup_reason,1);
-      }
-      break;
-    }
-
   // Check if battery is supplying enough voltage to drive the SCD40
   // if (lipoBattery.isActiveAlert())
   // {
@@ -240,7 +200,45 @@ void loop()
   // is it time to sleep and wakeup?
   if((millis() - timeLastSleepMS) >= (screenDisplayTimeMS)) {
     powerLightSleep(hardwareLightSleepTimeμS);
-
+    esp_sleep_wakeup_cause_t wakeup_reason;
+    wakeup_reason = esp_sleep_get_wakeup_cause();
+    switch (wakeup_reason)
+    {
+      case ESP_SLEEP_WAKEUP_TIMER : // do nothing
+      {
+        debugMessage("wakeup cause: timer",1);
+      }
+      break;
+      case ESP_SLEEP_WAKEUP_EXT0 :
+      {
+        debugMessage("wakeup cause: RTC gpio pin",1);
+        delay(500);  // Debounce?
+      }
+      break;
+      // case ESP_SLEEP_WAKEUP_EXT1 :
+      // {
+      //   uint16_t gpioReason = log(esp_sleep_get_ext1_wakeup_status())/log(2);
+      //   debugMessage(String("wakeup cause: RTC gpio pin: ") + gpioReason,1);
+      //   // implment switch (gpioReason)
+      // }
+      // break;
+      // case ESP_SLEEP_WAKEUP_TOUCHPAD : 
+      // {
+      //   debugMessage("wakup cause: touchpad",1);
+      // }  
+      // break;
+      // case ESP_SLEEP_WAKEUP_ULP : 
+      // {
+      //   debugMessage("wakeup cause: program",1);
+      // }  
+      // break; 
+      default :
+      {
+        // likely caused by reset after firmware load
+        debugMessage(String("Wakeup likely cause: first boot after firmware flash, reason: ") + wakeup_reason,1);
+      }
+      break;
+    }
     // needed?
     Serial.begin(115200);
     debugMessage(String("I'm back"),1);
@@ -941,13 +939,21 @@ void powerLightWakeUp()
 
   // wake the display
   display.enableSleep(false);
-  delay(120);             // Wait for the display to enter sleep mode
-  debugMessage(String("powerLightSleep(): display wakeup"),1);
+  debugMessage(String("powerLightWakeUp(): display wakeup"),1);
 
-  // // // wake up the CO2 sensor?
-  // #ifndef HARDWARE_SIMULATE
-  //   co2Sensor.wakeUp();
-  // #endif
+  // wake up the CO2 sensor
+  #ifndef HARDWARE_SIMULATE
+    static char errorMessage[64];
+    static int16_t error;
+
+    error = co2Sensor.wakeUp();
+    if (error) {
+      errorToString(error, errorMessage, sizeof errorMessage);
+      debugMessage(String("Error trying to execute wakeUp(): ") + errorMessage,1);
+    }
+    else
+      debugMessage("powerLightWakeUp(): SCD40 on",1);
+  #endif
 
   debugMessage(String("powerLightWakeUp() end"),1);
 }
