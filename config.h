@@ -53,14 +53,16 @@ const uint16_t batteryVoltageMax = 420;
 #endif
 
 const uint8_t co2GraphPoints=10;  // How many CO2 points to retain for the graphing screen
+const uint8_t co2SensorReadFailureLimit = 20;
 
-// CO2 value thresholds for labeling
-const uint16_t co2Fair =  800;
-const uint16_t co2Poor =  1200;
-const uint16_t co2Bad =   1600;
+const uint16_t sensorCO2Min =   400;   // ppm per datasheet, technically 0
+const uint16_t sensorCO2Fair =  800;
+const uint16_t sensorCO2Poor =  1200;
+const uint16_t sensorCO2Bad =   1600;
+const uint16_t sensorCO2Max =   2000;  // ppm per datasheet, technically 40000
 
 // warnings
-const String warningLabels[4]={"Good", "Fair", "Poor", "Bad"};
+// const String warningLabels[4]={"Good", "Fair", "Poor", "Bad"};
 // Subjective color scheme using 16 bit ('565') RGB colors
 const uint16_t warningColor[4] = {
   0x07E0, // Green = "Good"
@@ -68,10 +70,6 @@ const uint16_t warningColor[4] = {
   0xFD20, // Orange = "Poor"
   0xF800  // Red = "Bad"
 };
-
-const uint16_t sensorCO2Min =      400;   // ppm per datasheet, technically 0
-const uint16_t sensorCO2Max =      2000;  // ppm per datasheet, technically 40000
-const uint8_t co2SensorReadFailureLimit = 20;
 
 // Hardware
 const uint32_t hardwareErrorSleepTimeμS = 10000000;   // deep sleep time if hardware error occurs
