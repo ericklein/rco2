@@ -22,7 +22,7 @@ const uint16_t buttonDebounceDelayMS = 50; // time to debounce button
 
 // Display
 const uint8_t screenRotation = 1; // rotation 3 orients 0,0 next to D0 button
-const uint8_t screenCount = 5;
+const uint8_t screenCount = 4;
 
 // screen layout assists in pixels
 const uint16_t xMargins = 5;
