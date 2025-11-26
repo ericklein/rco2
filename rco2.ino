@@ -9,8 +9,6 @@
 #include "secrets.h"  // private credentials
 #include "measure.h"  // Utility class for easy handling aggregate sensor data
 
-#include "driver/rtc_io.h"
-
 #ifndef HARDWARE_SIMULATE
   // instanstiate scd40 hardware object
   #include <SensirionI2cScd4x.h>
@@ -73,29 +71,24 @@ void setup()
 
   #ifdef HARDWARE_SIMULATE
     // generate random numbers for every boot cycle
-    // used by HARDWARE_SIUMLATE
     randomSeed(analogRead(0));
   #endif
 
-  // Set ESP32 external trigger ext0 for one button wakeup interupt
-  rtc_gpio_pullup_dis(WAKE_FROM_SLEEP_PIN);
-  rtc_gpio_pulldown_en(WAKE_FROM_SLEEP_PIN);
-
   esp_err_t result = esp_sleep_enable_ext0_wakeup(WAKE_FROM_SLEEP_PIN,1);  //1 = High, 0 = Low
   if (result == ESP_OK) {
-    debugMessage("EXT0 Wake-Up set successfully as wake-up source.",1);
+    debugMessage("GPIO pin set as wake-up source",1);
   } 
   else {
-    debugMessage("Failed to set EXT0 Wake-Up as wake-up source.",1);
+    debugMessage("GPIO pin failed to set as wake-up source",1);
   }
 
   // Set ESP32 light sleep interval
   result = esp_sleep_enable_timer_wakeup(hardwareLightSleepTimeμS);
   // delay(100);
   if (result == ESP_OK) {
-    Serial.println("Timer Wake-Up set successfully as wake-up source.");
+    debugMessage(String(hardwareLightSleepTimeμS/1000) + " second timer set successfully as wake-up source",1);
   } else {
-      Serial.println("Failed to set Timer Wake-Up as wake-up source.");
+      debugMessage("Timer failed to set as wake-up source",1);
   }
 
   // initialize CO2 array for graphing
@@ -142,34 +135,9 @@ void setup()
   #endif
 }
 
-// new loop()
-
-// check battery
-// timing based single shot read and update current screen
-// check button and update screen if needed
-// display screen for x seconds
-// go to sleep (screen, sensor, esp32) for x seconds or GPIO wakeup
-
 void loop()
 {
-  // Check if battery is supplying enough voltage to drive the SCD40
-  // if (lipoBattery.isActiveAlert())
-  // {
-  //   uint8_t status_flags = lipoBattery.getAlertStatus();
-  //   // temp debug code
-  //   Serial.print(F("ALERT! flags = 0x"));
-  //   Serial.println(status_flags, HEX);
-  //   if (status_flags & MAX1704X_ALERTFLAG_VOLTAGE_LOW)
-  //   {
-  //     debugMessage("Battery below required threshold",1);
-  //     screenAlert("Plz charge");
-  //     lipoBattery.clearAlertFlag(MAX1704X_ALERTFLAG_VOLTAGE_LOW);
-  //     // reboot device. If the device is attached to charger, it will get out of this situation
-  //     powerDeepSleep(hardwareRebootInterval);
-  //   }
-  // } 
-
-  buttonOne.loop();
+   buttonOne.loop();
   // check if buttons were pressed
   if (buttonOne.isReleased())
   {
@@ -181,6 +149,23 @@ void loop()
   // is it time to read the sensor?
   if((millis() - timeLastSampleMS) >= (sensorSampleIntervalMS))
   {
+    // Check if battery is supplying enough voltage to drive the SCD40
+    // if (lipoBattery.isActiveAlert())
+    // {
+    //   uint8_t status_flags = lipoBattery.getAlertStatus();
+    //   // temp debug code
+    //   Serial.print(F("ALERT! flags = 0x"));
+    //   Serial.println(status_flags, HEX);
+    //   if (status_flags & MAX1704X_ALERTFLAG_VOLTAGE_LOW)
+    //   {
+    //     debugMessage("Battery below required threshold",1);
+    //     screenAlert("Plz charge");
+    //     lipoBattery.clearAlertFlag(MAX1704X_ALERTFLAG_VOLTAGE_LOW);
+    //     // reboot device. If the device is attached to charger, it will get out of this situation
+    //     powerDeepSleep(hardwareRebootInterval);
+    //   }
+    // }
+
     if (!sensorSCD4xSSRead())
     {
       screenAlert("CO2 read fail");
@@ -200,18 +185,20 @@ void loop()
   // is it time to sleep and wakeup?
   if((millis() - timeLastSleepMS) >= (screenDisplayTimeMS)) {
     powerLightSleep(hardwareLightSleepTimeμS);
-    esp_sleep_wakeup_cause_t wakeup_reason;
-    wakeup_reason = esp_sleep_get_wakeup_cause();
+    
+    // Serial.begin(115200);      // needed?
+
+    esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
     switch (wakeup_reason)
     {
       case ESP_SLEEP_WAKEUP_TIMER : // do nothing
       {
-        debugMessage("wakeup cause: timer",1);
+        debugMessage("wakeup from light sleep via timer",1);
       }
       break;
       case ESP_SLEEP_WAKEUP_EXT0 :
       {
-        debugMessage("wakeup cause: RTC gpio pin",1);
+        debugMessage("wakeup from light sleep via GPIO pin",1);
         delay(500);  // Debounce?
       }
       break;
@@ -239,13 +226,9 @@ void loop()
       }
       break;
     }
-    // needed?
-    Serial.begin(115200);
-    debugMessage(String("I'm back"),1);
-
     // after wakeup
-    timeLastSleepMS = millis();
     powerLightWakeUp();
+    timeLastSleepMS = millis();
   }
 }
 
@@ -253,10 +236,10 @@ void screenUpdate(bool firstTime)
 {
   switch(screenCurrent) {
     case 0:
-      screenSaver();
+      screenCurrentData();
       break;
     case 1:
-      screenCurrentData();
+      screenGraph();
       break;
     case 2:
       screenAggregateData();
@@ -264,13 +247,10 @@ void screenUpdate(bool firstTime)
     case 3:
       screenColor();
       break;
-    case 4:
-      screenGraph();
-      break;
     default:
       // This shouldn't happen, but if it does...
       screenCurrentData();
-      debugMessage("bad screen ID",1);
+      debugMessage("bad screen ID passed to screenUpdate()",1);
       break;
   }
 }
@@ -365,8 +345,8 @@ void screenCurrentData()
   // screenCurrentData layout assist
   // uint16_t for portability to larger screens
   const uint16_t yCO2 = 40;
-  const uint16_t yTempHumidity = 80;
-  const uint16_t yIcon = 55;
+  const uint16_t yTempHumidity = 85;
+  const uint16_t yIcon = 60;
   const uint16_t xHumidity = 150;
   const uint16_t xIconStep = 50;
   
@@ -406,25 +386,6 @@ void screenColor()
   debugMessage("screenColor() start",1);
   display.fillScreen(warningColor[co2Range(sensorData.ambientCO2[co2GraphPoints-1])]);  // Use highlight color LUT
   debugMessage("screenColor() end",1);
-}
-
-void screenSaver()
-// Display current CO2 reading at a random location (e.g. "screen saver")
-{
-  int16_t x, y;
-
-  debugMessage("screenSaver() start",1);
-  display.fillScreen(ST77XX_BLACK);
-  display.setTextSize(1);  // Needed so custom fonts scale properly
-  display.setFont(&FreeSans18pt7b);
-
-  // Pick a random location that'll show up
-  x = random(xMargins,display.width()-xMargins-64);  // 64 pixels leaves room for 4 digit CO2 value
-  y = random(35,display.height()-yMargins); // 35 pixels leaves vertical room for text display
-  display.setCursor(x,y);
-  display.setTextColor(warningColor[co2Range(sensorData.ambientCO2[co2GraphPoints-1])]);  // Use highlight color LUT
-  display.println(sensorData.ambientCO2[co2GraphPoints-1]);
-  debugMessage("screenSaver() end", 1);
 }
 
 void screenAggregateData()
